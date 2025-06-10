@@ -17,6 +17,16 @@ setup(
         "requests>=2.25.0",
         "kubernetes>=24.2.0",
     ],
+    extras_require={
+        "dev": [
+            "pytest>=7.0.0",
+            "black>=22.0.0",
+            "flake8>=4.0.0",
+        ],
+        "build": [
+            "pyinstaller>=5.0.0",
+        ],
+    },
     entry_points={
         "console_scripts": [
             "dynactl=dynactl.cli:main",

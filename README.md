@@ -7,6 +7,40 @@ A Python based tool to manage customer's DevOps operations on Dynamo AI deployme
 pip install -e .
 ```
 
+# Creating Standalone Executables
+
+dynactl can be packaged as a standalone executable using PyInstaller, which allows distribution to users without requiring Python installation or dependencies.
+
+## Requirements
+
+- Python 3.8 or higher
+- PyInstaller (`pip install pyinstaller`)
+
+## Building the Executable
+
+```bash
+# Install dependencies first
+pip install -e .
+
+# Build the executable using the provided spec file
+pyinstaller dynactl.spec
+
+# Or build without the spec file
+pyinstaller --onefile dynactl/cli.py --name dynactl
+```
+
+The resulting executable will be created in the `dist` directory.
+
+## Platform-Specific Builds
+
+To build executables for distribution:
+
+- **Windows**: Build on Windows to create `dynactl.exe`
+- **macOS**: Build on macOS to create the macOS binary
+- **Linux**: Build on Linux to create the Linux binary
+
+Each platform requires building on that specific platform for full compatibility.
+
 # Global Options
 
 These options can be used with any dynactl command:
