@@ -1,0 +1,24 @@
+.cursorrules
+
+# Ignore Python bytecode
+__pycache__/
+*.pyc
+
+# Ignore logs
+*.log
+
+# Ignore environment files
+.env
+
+# Ignore OS files
+.DS_Store
+
+# Ignore node_modules
+node_modules/
+
+# Ignore build artifacts
+dist/
+build/
+
+# Ignore build metadata
+*.egg-info/

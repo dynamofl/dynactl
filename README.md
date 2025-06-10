@@ -1,6 +1,12 @@
 # dynactl
 A Python based tool to manage customer's DevOps operations on Dynamo AI deployment and maintenance.
 
+# Installation
+
+```
+pip install -e .
+```
+
 # Global Options
 
 These options can be used with any dynactl command:
