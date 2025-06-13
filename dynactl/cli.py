@@ -70,6 +70,18 @@ cli.add_command(validate_command)
 def main():
     """Main entry point for the CLI"""
     try:
+        # Support for PyInstaller bundled application
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        if getattr(sys, 'frozen', False):
+            # If the application is run as a bundle, the PyInstaller bootloader
+            # extends the sys module by a flag frozen=True and sets the app 
+            # path into variable _MEIPASS
+            application_path = sys._MEIPASS
+            os.environ['DYNACTL_BUNDLED'] = 'true'
+            logger.debug(f"Running as PyInstaller bundle from {application_path}")
+        else:
+            application_path = os.path.dirname(os.path.abspath(__file__))
+            logger.debug(f"Running from source at {application_path}")
         cli()
     except Exception as e:
         logger.error(f"Error: {str(e)}")
