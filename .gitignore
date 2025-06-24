@@ -1,24 +1,75 @@
+# Cursor rules
 .cursorrules
 
-# Ignore Python bytecode
-__pycache__/
-*.pyc
+# Go specific
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+*.prof
+*.trace
+*.cover
+coverage.out
 
-# Ignore logs
-*.log
+# Go workspace file
+go.work
 
-# Ignore environment files
-.env
-
-# Ignore OS files
-.DS_Store
-
-# Ignore node_modules
-node_modules/
-
-# Ignore build artifacts
+# Build artifacts
 dist/
 build/
+bin/
+artifacts/
 
-# Ignore build metadata
-*.egg-info/
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Logs
+*.log
+logs/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# OS specific files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Node.js (if any frontend tools are used)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+.#*
+
+# Backup files
+*.backup
+*.old
+
+# Local configuration files
+config.local.*
+*.local

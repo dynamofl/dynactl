@@ -1,0 +1,23 @@
+{
+  "customer_id": "test123",
+  "customer_name": "test",
+  "release_version": "1.0.0",
+  "onboarding_date": "2024-07-10",
+  "license_generated_at": "2024-07-11",
+  "license_expiry": "2025-12-31T00:00:00Z",
+  "max_users": 10,
+  "spoc": {
+    "name": "Test User",
+    "email": "test@example.com"
+  },
+  "images": [],
+  "models": [],
+  "charts": [
+    {
+      "name": "dynamoai-base",
+      "version": "1.0.0",
+      "appVersion": "3.21.2",
+      "path": "artifacts.dynamo.ai/intact-helm-charts/intact--dynamoai-base"
+    }
+  ]
+} 
