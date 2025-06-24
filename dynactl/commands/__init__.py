@@ -1,3 +1,0 @@
-"""
-Command implementations for dynactl
-""" 

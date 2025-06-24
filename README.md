@@ -1,176 +1,198 @@
 # dynactl
-A Python based tool to manage customer's DevOps operations on Dynamo AI deployment and maintenance.
+A Go-based tool to manage customer's DevOps operations on Dynamo AI deployment and maintenance.
 
 # Installation
 
-```
-pip install -e .
-```
-
-# Creating Standalone Executables
-
-dynactl can be packaged as a standalone executable using PyInstaller, which allows distribution to users without requiring Python installation or dependencies.
-
-## Requirements
-
-- Python 3.8 or higher
-- PyInstaller (`pip install pyinstaller`)
-
-## Building the Executable
+## From Source
 
 ```bash
-# Install dependencies first
-pip install -e .
+# Clone the repository
+git clone https://github.com/dynamoai/dynactl.git
+cd dynactl
 
-# Build the executable using the provided spec file
-pyinstaller dynactl.spec
+# Build the binary
+go build -o dynactl ./cmd/dynactl
 
-# Or build without the spec file
-pyinstaller --onefile dynactl/cli.py --name dynactl
+# Install the binary (optional)
+sudo mv dynactl /usr/local/bin/
 ```
 
-The resulting executable will be created in the `dist` directory.
+## From Binary
 
-## Platform-Specific Builds
-
-To build executables for distribution:
-
-- **Windows**: Build on Windows to create `dynactl.exe`
-- **macOS**: Build on macOS to create the macOS binary
-- **Linux**: Build on Linux to create the Linux binary
-
-Each platform requires building on that specific platform for full compatibility.
+Download the latest release from the [releases page](https://github.com/dynamoai/dynactl/releases) and extract the binary to your PATH.
 
 # Global Options
 
 These options can be used with any dynactl command:
 
 - `--verbose, -v`: Increase output verbosity (can be used multiple times)
-- `--config-file <path>`: Specify a custom config file location (default: ~/.dynactl/config)
 - `--help, -h`: Display help information for the command
 
-# `dynactl config`
+# `dynactl config` (Future Work)
 
-This command gets and sets the configuration for dynactl. It's saved into the .dynactl/config file.
-
-## `dynactl config get <key>`
-
-- Fetches the value of the `key` in configuration.
-- Returns `Invalid key` error message if the key is not supported.
-- Returns `The value is unset` error message upon error.
-
-**Example:**
-```
-$ dynactl config get cloud
-$ [cloud]: aws
-```
-
-## `dynactl config set <key> <value>`
-
-- Sets the value of the `key` to `value` in configuration.
-- Returns `Invalid key` error message if the key is not supported.
-- Returns `Invalid value` error message if the value is not supported.
-
-**Example:**
-```
-$ dynactl config set cloud aws
-$ Updated property [cloud]: aws
-```
+Configuration management functionality is planned for future releases. This will include:
+- Getting and setting configuration values
+- Managing registry credentials
+- Cloud provider configuration
+- Cluster context management
 
 # `dynactl artifacts`
 
 This command processes the artifacts for the deployment and upgrade.
 
-## `dynactl artifacts pull --manifest-uri <oci_uri> --output-dir <path>`
+## `dynactl artifacts pull --file <filename>`
 
-- Fetches manifest JSON from `<oci_uri>`.
-- Parses artifact list.
-- For each artifact: Pulls using appropriate tool (`docker pull`, `helm pull oci://...`, `oras pull`) based on URI/type. Saves to `-output-dir`. Handles authentication via Docker config/environment variables. Respects `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`.
+- Reads a manifest JSON file from the local filesystem.
+- Parses artifact list from `images`, `models`, and `charts` arrays.
+- For each artifact: Pulls using appropriate tool (`docker pull` for container images, `helm pull` for Helm charts, `oras pull` for ML models) based on type. Saves to `--output-dir`. Handles authentication via Docker config/environment variables.
 
 **Example:**
 ```
-$ dynactl artifacts pull --manifest-uri registry.example.com/manifests/dynamo:v1.0.0 --output-dir ./artifacts
-Successfully pulled 15 artifacts to ./artifacts
+$ dynactl artifacts pull --file examples/example.manifest.json --output-dir ./artifacts
+Successfully pulled 3 artifacts to ./artifacts
 ```
 
-## `dynactl artifacts mirror --manifest-uri <oci_uri> --target-registry <registry_url>`
+**Manifest File Format:**
+```json
+{
+  "customer_id": "abc123",
+  "customer_name": "paypal",
+  "release_version": "3.22.4",
+  "onboarding_date": "2024-07-10",
+  "license_generated_at": "2024-07-11",
+  "license_expiry": "2025-12-31T00:00:00Z",
+  "max_users": 25,
+  "spoc": {
+    "name": "John Doe",
+    "email": "john.doe@example.com"
+  },
+  "images": [
+    {
+      "name": "dynamoai-operator",
+      "tag": "latest",
+      "path": "oci://artifacts.dynamo.ai/paypal/dynamoai-operator"
+    }
+  ],
+  "models": [
+    {
+      "name": "base-model",
+      "tag": "latest",
+      "path": "artifacts.dynamo.ai/paypal/sentence-transformers/all-minilm-l6-v2"
+    }
+  ],
+  "charts": [
+    {
+      "name": "dynamoai-base",
+      "version": "1.0.0",
+      "appVersion": "3.21.2",
+      "path": "oci://artifacts.dynamo.ai/intact-helm-charts/intact--dynamoai-base"
+    }
+  ]
+}
+```
+
+## Future Work
+
+The following artifacts commands are planned for future releases:
+
+### `dynactl artifacts mirror --manifest-uri <oci_uri> --target-registry <registry_url>`
 
 - Fetches manifest.
 - Pulls each artifact from Harbor.
 - Re-tags and pushes each artifact to `-target-registry`. Handles auth for both source and target. Respects proxies.
 
-**Example:**
-```
-$ dynactl artifacts mirror --manifest-uri registry.example.com/manifests/dynamo:v1.0.0 --target-registry internal-registry.company.com
-Successfully mirrored 15 artifacts to internal-registry.company.com
-```
-
-## `dynactl artifacts export --manifest-uri <oci_uri> --archive-file <path.tar.gz>`
+### `dynactl artifacts export --manifest-uri <oci_uri> --archive-file <path.tar.gz>`
 
 - Fetches manifest.
 - Pulls all artifacts to a temporary local cache.
 - Packages the manifest and all artifacts into a single compressed tarball.
 
-**Example:**
-```
-$ dynactl artifacts export --manifest-uri registry.example.com/manifests/dynamo:v1.0.0 --archive-file dynamo-artifacts.tar.gz
-Successfully exported 15 artifacts to dynamo-artifacts.tar.gz (2.3GB)
-```
-
-## `dynactl artifacts import --archive-file <path.tar.gz> --target-registry <registry_url>`
+### `dynactl artifacts import --archive-file <path.tar.gz> --target-registry <registry_url>`
 
 - Extracts the archive.
 - Reads the manifest.
 - Pushes all artifacts from the local cache to the `-target-registry`. Handles auth for target.
 
-**Example:**
-```
-$ dynactl artifacts import --archive-file dynamo-artifacts.tar.gz --target-registry internal-registry.company.com
-Successfully imported 15 artifacts to internal-registry.company.com
-```
-
 # `dynactl cluster`
 
 This command handles the cluster status.
 
-## `dynactl cluster check`
+## `dynactl cluster check --namespace <namespace>`
+
+- If <namespace> doesn't exist, dynactl will create it.
 
 - Checks the cluster status for the deployment, including:
-  - Available CPU, memory, and storage resources
-  - Required RBAC permissions
-  - Network connectivity and DNS resolution
   - Kubernetes version compatibility
-  - Required CRDs and admission controllers
+  - Available vCPU, memory resources (more than 32 vCPU, 128 GB memory)
+  - Required RBAC permissions in the namespace
+    - Create deployment
+    - Create PVC
+    - Create service
+    - Create configmap
+    - Create secret
+  - Cluster RBAC permissions
+    - Create CRD
 
 **Example:**
 ```
-$ dynactl cluster check
+$ dynactl cluster check --namespace my-namespace
 ✓ Kubernetes version: 1.24.6 (compatible)
-✓ Available resources: sufficient (8/16 CPU cores, 24/32GB memory)
+✓ Available resources: 24/24 CPU cores, 96/96 GB memory (allocatable/total)
 ✓ RBAC permissions: all required permissions available
-✓ Network connectivity: all tests passed
-! Warning: Limited storage capacity (80% used)
+✓ Cluster RBAC permissions: all required cluster permissions available
+✓ Storage capacity: adequate storage capacity (45.2% used)
 ```
 
-# `dynactl validate`
+# `dynactl validate` (Future Work)
 
-Validates that the deployed Dynamo AI service functions correctly by performing the following checks:
-- API endpoint connectivity and response time
+Service validation functionality is planned for future releases. This will include:
+- API endpoint connectivity and response time checks
 - Core service health checks
-- Authentication and authorization functionality
+- Authentication and authorization functionality validation
 - Data processing pipeline verification
 - External dependency integration validation
 - Basic functionality smoke tests
 
-**Example:**
+# Development
+
+## Prerequisites
+
+- Go 1.21 or higher
+- Docker (for container operations)
+- kubectl (for Kubernetes operations)
+
+## Building
+
+```bash
+# Build the binary
+go build -o dynactl ./cmd/dynactl
+
+# Run tests
+go test ./...
+
+# Run linter
+go vet ./...
 ```
-$ dynactl validate
-Performing validation of Dynamo AI deployment...
-✓ API endpoints: all accessible (avg response: 126ms)
-✓ Core services: all healthy
-✓ Auth subsystem: working correctly
-✓ Data processing: validated
-✓ External integrations: connected
-✓ Smoke tests: passed
-Validation successful: Dynamo AI is functioning correctly
+
+## Project Structure
+
+```
+dynactl/
+├── cmd/
+│   └── dynactl/
+│       ├── main.go       # Main entry point
+│       └── main_test.go  # Tests for main command
+├── pkg/
+│   ├── commands/         # Command implementations
+│   │   ├── artifacts.go  # Artifacts command
+│   │   └── cluster.go    # Cluster command
+│   └── utils/            # Utility functions
+│       ├── artifacts.go  # Artifact processing utilities
+│       ├── kubernetes.go # Kubernetes utilities
+│       ├── logging.go    # Logging utilities
+│       └── logging_test.go # Tests for logging
+├── examples/             # Example manifest files
+├── go.mod
+├── go.sum
+└── README.md
 ```
