@@ -1,9 +1,25 @@
 # dynactl
+
 A Go-based tool to manage customer's DevOps operations on Dynamo AI deployment and maintenance.
 
-# Installation
+## Features
 
-## From Source
+- **Artifact Management**: Pull container images, ML models, and Helm charts from OCI registries
+- **Cluster Validation**: Comprehensive Kubernetes cluster health and permission checks
+- **Enhanced Progress Reporting**: Detailed progress information with file sizes and timing
+- **Structured Codebase**: Modular, maintainable code with clear separation of concerns
+- **Cross-Platform**: Works on macOS, Linux, and Windows
+
+## Installation
+
+### Prerequisites
+
+- Go 1.21 or higher
+- Docker (for container operations)
+- kubectl (for Kubernetes operations)
+- ORAS CLI (for OCI artifact operations)
+
+### From Source
 
 ```bash
 # Clone the repository
@@ -11,141 +27,193 @@ git clone https://github.com/dynamoai/dynactl.git
 cd dynactl
 
 # Build the binary
-go build -o dynactl ./cmd/dynactl
+make build
 
 # Install the binary (optional)
-sudo mv dynactl /usr/local/bin/
+sudo mv bin/dynactl /usr/local/bin/
 ```
 
-## From Binary
+### From Binary
 
 Download the latest release from the [releases page](https://github.com/dynamoai/dynactl/releases) and extract the binary to your PATH.
 
-# Global Options
+## Global Options
 
 These options can be used with any dynactl command:
 
 - `--verbose, -v`: Increase output verbosity (can be used multiple times)
 - `--help, -h`: Display help information for the command
 
-# `dynactl config` (Future Work)
+## Commands
 
-Configuration management functionality is planned for future releases. This will include:
-- Getting and setting configuration values
-- Managing registry credentials
-- Cloud provider configuration
-- Cluster context management
+### `dynactl artifacts`
 
-# `dynactl artifacts`
+Process artifacts for deployment and upgrade operations.
 
-This command processes the artifacts for the deployment and upgrade.
+#### `dynactl artifacts pull --file <filename>`
 
-## `dynactl artifacts pull --file <filename>`
-
-- Reads a manifest JSON file from the local filesystem.
-- Parses artifact list from `images`, `models`, and `charts` arrays.
-- For each artifact: Pulls using appropriate tool (`docker pull` for container images, `helm pull` for Helm charts, `oras pull` for ML models) based on type. Saves to `--output-dir`. Handles authentication via Docker config/environment variables.
+Pulls artifacts from a local manifest JSON file.
 
 **Example:**
+```bash
+$ dynactl artifacts pull --file testdata/sample.manifest.json --output-dir ./artifacts
+=== Loading Manifest from File ===
+Manifest file: testdata/sample.manifest.json
+Output directory: ./artifacts
+
+=== Loading Manifest and Pulling Artifacts ===
+Manifest loaded successfully:
+  Customer: Test Customer (test-customer-123)
+  Release Version: 3.22.2
+  Onboarding Date: 2024-01-15
+  License Expiry: 2025-01-15T10:00:00Z
+  Max Users: 100
+
+Artifacts found in manifest:
+  Container Images: 2
+  ML Models: 2
+  Helm Charts: 2
+
+=== Starting Artifact Pull Process ===
+Total artifacts to pull: 6
+Output directory: ./artifacts
+Components breakdown:
+  - Container Images: 2
+  - ML Models: 2
+  - Helm Charts: 2
+
+------------------------------------------------------------
+Pulling artifact 1/6: dynamoai-api (containerImage)
+------------------------------------------------------------
+📦 Pulling container image...
+  Reference: artifacts.dynamo.ai/dynamoai/3.22.2/images/dynamoai-api:latest
+  Downloading image layers...
+  Saving image to: ./artifacts/dynamoai-api.tar
+  Image saved: 245.67 MB
+✅ Successfully pulled dynamoai-api in 45.2s
+
+=== Pull Summary ===
+Total time: 2m15s
+Successful: 6
+Failed: 0
+
+🎉 Successfully completed all operations!
+Total artifacts pulled: 6
+All files saved to: ./artifacts
 ```
-$ dynactl artifacts pull --file examples/example.manifest.json --output-dir ./artifacts
-Successfully pulled 3 artifacts to ./artifacts
+
+#### `dynactl artifacts pull --url <oci_uri>`
+
+Pulls a manifest file from an OCI registry and then pulls all artifacts listed in the manifest.
+
+**Example:**
+```bash
+$ dynactl artifacts pull --url artifacts.dynamo.ai/dynamoai/manifest:3.22.2
+=== Pulling Manifest from URL ===
+URL: artifacts.dynamo.ai/dynamoai/manifest:3.22.2
+Output directory: ./artifacts
+
+✅ Successfully pulled manifest from artifacts.dynamo.ai/dynamoai/manifest:3.22.2 to ./artifacts
+
+=== Loading Manifest and Pulling Artifacts ===
+Manifest loaded successfully:
+  Customer: dynamoai (1f4a8e7e-6c5d-4636-91f0-bf9e72de92c2)
+  Release Version: 3.22.2
+  Onboarding Date: 2025-06-24T08:13:22.673045+00:00
+
+Artifacts found in manifest:
+  Container Images: 17
+  ML Models: 1
+  Helm Charts: 3
+
+[Progress continues with detailed artifact pulling...]
 ```
 
 **Manifest File Format:**
 ```json
 {
-  "customer_id": "abc123",
-  "customer_name": "paypal",
-  "release_version": "3.22.4",
-  "onboarding_date": "2024-07-10",
-  "license_generated_at": "2024-07-11",
-  "license_expiry": "2025-12-31T00:00:00Z",
-  "max_users": 25,
+  "customer_id": "test-customer-123",
+  "customer_name": "Test Customer",
+  "release_version": "3.22.2",
+  "onboarding_date": "2024-01-15",
+  "license_generated_at": "2024-01-15T10:00:00Z",
+  "license_expiry": "2025-01-15T10:00:00Z",
+  "max_users": 100,
   "spoc": {
     "name": "John Doe",
-    "email": "john.doe@example.com"
+    "email": "john.doe@testcustomer.com"
+  },
+  "artifacts": {
+    "charts_root": "oci://artifacts.dynamo.ai/dynamoai/3.22.2/charts",
+    "images_root": "oci://artifacts.dynamo.ai/dynamoai/3.22.2/images",
+    "models_root": "oci://artifacts.dynamo.ai/dynamoai/3.22.2/models"
   },
   "images": [
-    {
-      "name": "dynamoai-operator",
-      "tag": "latest",
-      "path": "oci://artifacts.dynamo.ai/paypal/dynamoai-operator"
-    }
+    "oci://artifacts.dynamo.ai/dynamoai/3.22.2/images/dynamoai-api:latest",
+    "oci://artifacts.dynamo.ai/dynamoai/3.22.2/images/dynamoai-web:latest"
   ],
   "models": [
-    {
-      "name": "base-model",
-      "tag": "latest",
-      "path": "artifacts.dynamo.ai/paypal/sentence-transformers/all-minilm-l6-v2"
-    }
+    "oci://artifacts.dynamo.ai/dynamoai/3.22.2/models/text-generation-model:latest",
+    "oci://artifacts.dynamo.ai/dynamoai/3.22.2/models/image-classification-model:latest"
   ],
   "charts": [
     {
       "name": "dynamoai-base",
-      "version": "1.0.0",
-      "appVersion": "3.21.2",
-      "path": "oci://artifacts.dynamo.ai/intact-helm-charts/intact--dynamoai-base"
+      "version": "1.1.2",
+      "appVersion": "3.22.2",
+      "filename": "dynamoai-base-1.1.2.tgz",
+      "harbor_path": "oci://artifacts.dynamo.ai/dynamoai/3.22.2/charts/dynamoai-base-1.1.2.tgz",
+      "sha256": "abc123def456",
+      "size_bytes": 1048576
     }
   ]
 }
 ```
 
-## Future Work
+### `dynactl cluster`
 
-The following artifacts commands are planned for future releases:
+Handle cluster status and validation.
 
-### `dynactl artifacts mirror --manifest-uri <oci_uri> --target-registry <registry_url>`
+#### `dynactl cluster check --namespace <namespace>`
 
-- Fetches manifest.
-- Pulls each artifact from Harbor.
-- Re-tags and pushes each artifact to `-target-registry`. Handles auth for both source and target. Respects proxies.
+Performs comprehensive cluster validation including:
 
-### `dynactl artifacts export --manifest-uri <oci_uri> --archive-file <path.tar.gz>`
-
-- Fetches manifest.
-- Pulls all artifacts to a temporary local cache.
-- Packages the manifest and all artifacts into a single compressed tarball.
-
-### `dynactl artifacts import --archive-file <path.tar.gz> --target-registry <registry_url>`
-
-- Extracts the archive.
-- Reads the manifest.
-- Pushes all artifacts from the local cache to the `-target-registry`. Handles auth for target.
-
-# `dynactl cluster`
-
-This command handles the cluster status.
-
-## `dynactl cluster check --namespace <namespace>`
-
-- If <namespace> doesn't exist, dynactl will create it.
-
-- Checks the cluster status for the deployment, including:
-  - Kubernetes version compatibility
-  - Available vCPU, memory resources (more than 32 vCPU, 128 GB memory)
-  - Required RBAC permissions in the namespace
-    - Create deployment
-    - Create PVC
-    - Create service
-    - Create configmap
-    - Create secret
-  - Cluster RBAC permissions
-    - Create CRD
+- **Kubernetes Version**: Checks compatibility with required version
+- **Resource Availability**: Validates CPU and memory requirements (32+ vCPU, 128+ GB memory)
+- **Namespace RBAC**: Verifies permissions for deployments, PVCs, services, configmaps, and secrets
+- **Cluster RBAC**: Checks cluster-level permissions for CRD creation
+- **Storage Capacity**: Assesses available storage and usage
 
 **Example:**
-```
+```bash
 $ dynactl cluster check --namespace my-namespace
+Checking cluster status for namespace: my-namespace
+
 ✓ Kubernetes version: 1.24.6 (compatible)
 ✓ Available resources: 24/24 CPU cores, 96/96 GB memory (allocatable/total)
 ✓ RBAC permissions: all required permissions available
 ✓ Cluster RBAC permissions: all required cluster permissions available
 ✓ Storage capacity: adequate storage capacity (45.2% used)
+
+✓ Cluster check completed successfully
 ```
 
-# `dynactl validate` (Future Work)
+## Future Work
 
-Service validation functionality is planned for future releases. This will include:
+The following features are planned for future releases:
+
+### Configuration Management (`dynactl config`)
+- Getting and setting configuration values
+- Managing registry credentials
+- Cloud provider configuration
+- Cluster context management
+
+### Advanced Artifact Operations
+- **`dynactl artifacts mirror`**: Mirror artifacts between registries
+- **`dynactl artifacts export`**: Export artifacts to compressed archives
+- **`dynactl artifacts import`**: Import artifacts from archives to registries
+
+### Service Validation (`dynactl validate`)
 - API endpoint connectivity and response time checks
 - Core service health checks
 - Authentication and authorization functionality validation
@@ -153,46 +221,70 @@ Service validation functionality is planned for future releases. This will inclu
 - External dependency integration validation
 - Basic functionality smoke tests
 
-# Development
+## Development
 
-## Prerequisites
-
-- Go 1.21 or higher
-- Docker (for container operations)
-- kubectl (for Kubernetes operations)
-
-## Building
+### Building
 
 ```bash
 # Build the binary
-go build -o dynactl ./cmd/dynactl
+make build
 
 # Run tests
-go test ./...
+make test
 
 # Run linter
-go vet ./...
+make lint
+
+# Clean build artifacts
+make clean
 ```
 
-## Project Structure
+### Project Structure
 
 ```
 dynactl/
 ├── cmd/
 │   └── dynactl/
-│       ├── main.go       # Main entry point
-│       └── main_test.go  # Tests for main command
+│       ├── main.go           # Main entry point
+│       └── main_test.go      # Tests for main command
 ├── pkg/
-│   ├── commands/         # Command implementations
-│   │   ├── artifacts.go  # Artifacts command
-│   │   └── cluster.go    # Cluster command
-│   └── utils/            # Utility functions
-│       ├── artifacts.go  # Artifact processing utilities
-│       ├── kubernetes.go # Kubernetes utilities
-│       ├── logging.go    # Logging utilities
-│       └── logging_test.go # Tests for logging
-├── examples/             # Example manifest files
-├── go.mod
-├── go.sum
-└── README.md
+│   ├── commands/             # Command implementations
+│   │   ├── artifacts.go      # Artifacts command logic
+│   │   ├── artifacts_test.go # Artifacts command tests
+│   │   └── cluster.go        # Cluster command logic
+│   └── utils/                # Utility functions
+│       ├── artifacts.go      # Manifest and component logic
+│       ├── artifact_pullers.go # Artifact pulling operations
+│       ├── kubernetes.go     # Kubernetes utilities
+│       ├── logging.go        # Logging utilities
+│       └── logging_test.go   # Tests for logging
+├── testdata/                 # Test manifest files
+├── examples/                 # Example files
+├── bin/                      # Built binaries
+├── Makefile                  # Build automation
+├── go.mod                    # Go module definition
+├── go.sum                    # Go module checksums
+└── README.md                 # This file
 ```
+
+### Key Features
+
+- **Modular Architecture**: Clear separation between commands, utilities, and business logic
+- **Enhanced Progress Reporting**: Detailed progress information with timing and file sizes
+- **Comprehensive Error Handling**: Graceful error handling with detailed error messages
+- **Cross-Platform Support**: Works on macOS, Linux, and Windows
+- **Authentication Support**: Uses Docker credentials for registry authentication
+- **Test Coverage**: Comprehensive test suite for all major functionality
+
+### Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests for new functionality
+5. Run the test suite: `make test`
+6. Submit a pull request
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
