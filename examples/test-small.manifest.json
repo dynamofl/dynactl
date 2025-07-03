@@ -1,0 +1,35 @@
+{
+  "customer_id": "1f4a8e7e-6c5d-4636-91f0-bf9e72de92c2",
+  "customer_name": "dynamoai",
+  "release_version": "3.22.2",
+  "onboarding_date": "2025-06-24T08:13:22.673045+00:00",
+  "license_generated_at": null,
+  "license_expiry": null,
+  "max_users": null,
+  "spoc": {
+    "name": "N/A",
+    "email": "N/A"
+  },
+  "artifacts": {
+    "charts_root": "oci://artifacts.dynamo.ai/dynamoai/3.22.2/charts/",
+    "images_root": "oci://artifacts.dynamo.ai/dynamoai/images/",
+    "models_root": "oci://artifacts.dynamo.ai/dynamoai/models/"
+  },
+  "charts": [
+    {
+      "name": "dynamoai-base",
+      "version": "1.1.2",
+      "appVersion": "3.22.2",
+      "filename": "dynamoai-base-1.1.2.tgz",
+      "harbor_path": "oci://artifacts.dynamo.ai/dynamoai/3.22.2/charts/dynamoai-base-1.1.2.tgz",
+      "sha256": "80d16aafda6fdf23047a2dd2abcdefad1411f357448b498027e7c15d2539fbe5",
+      "size_bytes": 500684
+    }
+  ],
+  "images": [
+    "oci://artifacts.dynamo.ai/dynamoai/images/db-migrations:dynamoai-3.22.2"
+  ],
+  "models": [
+    "oci://artifacts.dynamo.ai/dynamoai/dynamoai-ml_pii_piiredaction_based_version_9:latest"
+  ]
+}

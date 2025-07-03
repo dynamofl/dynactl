@@ -1,0 +1,46 @@
+{
+  "customer_id": "test-customer-123",
+  "customer_name": "Test Customer",
+  "release_version": "3.22.2",
+  "onboarding_date": "2024-01-15",
+  "license_generated_at": "2024-01-15T10:00:00Z",
+  "license_expiry": "2025-01-15T10:00:00Z",
+  "max_users": 100,
+  "spoc": {
+    "name": "John Doe",
+    "email": "john.doe@testcustomer.com"
+  },
+  "artifacts": {
+    "charts_root": "oci://artifacts.dynamo.ai/dynamoai/3.22.2/charts",
+    "images_root": "oci://artifacts.dynamo.ai/dynamoai/3.22.2/images",
+    "models_root": "oci://artifacts.dynamo.ai/dynamoai/3.22.2/models"
+  },
+  "images": [
+    "oci://artifacts.dynamo.ai/dynamoai/3.22.2/images/dynamoai-api:latest",
+    "oci://artifacts.dynamo.ai/dynamoai/3.22.2/images/dynamoai-web:latest"
+  ],
+  "models": [
+    "oci://artifacts.dynamo.ai/dynamoai/3.22.2/models/text-generation-model:latest",
+    "oci://artifacts.dynamo.ai/dynamoai/3.22.2/models/image-classification-model:latest"
+  ],
+  "charts": [
+    {
+      "name": "dynamoai-base",
+      "version": "1.1.2",
+      "appVersion": "3.22.2",
+      "filename": "dynamoai-base-1.1.2.tgz",
+      "harbor_path": "oci://artifacts.dynamo.ai/dynamoai/3.22.2/charts/dynamoai-base-1.1.2.tgz",
+      "sha256": "abc123def456",
+      "size_bytes": 1048576
+    },
+    {
+      "name": "dynamoai-monitoring",
+      "version": "2.0.1",
+      "appVersion": "3.22.2",
+      "filename": "dynamoai-monitoring-2.0.1.tgz",
+      "harbor_path": "oci://artifacts.dynamo.ai/dynamoai/3.22.2/charts/dynamoai-monitoring-2.0.1.tgz",
+      "sha256": "def456abc789",
+      "size_bytes": 2097152
+    }
+  ]
+} 

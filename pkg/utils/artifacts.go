@@ -4,9 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
-	"path/filepath"
 	"strings"
+	"time"
 )
 
 // ArtifactManifest represents the structure of the manifest file
@@ -15,12 +14,13 @@ type ArtifactManifest struct {
 	CustomerName       string    `json:"customer_name"`
 	ReleaseVersion     string    `json:"release_version"`
 	OnboardingDate     string    `json:"onboarding_date"`
-	LicenseGeneratedAt string    `json:"license_generated_at"`
-	LicenseExpiry      string    `json:"license_expiry"`
-	MaxUsers           int       `json:"max_users"`
+	LicenseGeneratedAt *string   `json:"license_generated_at"`
+	LicenseExpiry      *string   `json:"license_expiry"`
+	MaxUsers           *int      `json:"max_users"`
 	SPOC               SPOC      `json:"spoc"`
-	Images             []Image   `json:"images"`
-	Models             []Model   `json:"models"`
+	Artifacts          Artifacts `json:"artifacts"`
+	Images             []string  `json:"images"`  // Array of OCI URIs
+	Models             []string  `json:"models"`  // Array of OCI URIs
 	Charts             []Chart   `json:"charts"`
 }
 
@@ -30,26 +30,22 @@ type SPOC struct {
 	Email string `json:"email"`
 }
 
-// Image represents a container image
-type Image struct {
-	Name string `json:"name"`
-	Tag  string `json:"tag"`
-	Path string `json:"path"`
+// Artifacts represents the root paths for different artifact types
+type Artifacts struct {
+	ChartsRoot string `json:"charts_root"`
+	ImagesRoot string `json:"images_root"`
+	ModelsRoot string `json:"models_root"`
 }
 
-// Model represents a machine learning model
-type Model struct {
-	Name string `json:"name"`
-	Tag  string `json:"tag"`
-	Path string `json:"path"`
-}
-
-// Chart represents a Helm chart
+// Chart represents a Helm chart with additional metadata
 type Chart struct {
 	Name       string `json:"name"`
 	Version    string `json:"version"`
 	AppVersion string `json:"appVersion"`
-	Path       string `json:"path"`
+	Filename   string `json:"filename"`
+	HarborPath string `json:"harbor_path"`
+	SHA256     string `json:"sha256"`
+	SizeBytes  int64  `json:"size_bytes"`
 }
 
 // Component represents a unified artifact component for processing
@@ -60,6 +56,15 @@ type Component struct {
 	Tag       string
 	Digest    string
 	MediaType string
+}
+
+// PullResult represents the result of pulling artifacts
+type PullResult struct {
+	TotalArtifacts int
+	SuccessCount   int
+	FailedCount    int
+	Duration       time.Duration
+	Errors         []string
 }
 
 // LoadManifest loads and parses the manifest file
@@ -80,58 +85,146 @@ func LoadManifest(filename string) (*ArtifactManifest, error) {
 
 // PullArtifacts pulls all artifacts specified in the manifest from Harbor
 func PullArtifacts(manifest *ArtifactManifest, outputDir string) error {
-	// Convert manifest to components
 	components := convertManifestToComponents(manifest)
 	
-	LogInfo("Pulling %d artifacts to directory: %s", len(components), outputDir)
-
-	// Create output directory if it doesn't exist
+	LogInfo("=== Starting Artifact Pull Process ===")
+	LogInfo("Total artifacts to pull: %d", len(components))
+	LogInfo("Output directory: %s", outputDir)
+	
+	// Display component breakdown
+	displayComponentBreakdown(components)
+	
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		return fmt.Errorf("failed to create output directory: %v", err)
 	}
+	
+	// Pull all artifacts and collect results
+	result := pullAllArtifacts(components, outputDir)
+	
+	// Display summary
+	displayPullSummary(result)
+	
+	if result.FailedCount > 0 {
+		return fmt.Errorf("failed to pull %d artifacts", result.FailedCount)
+	}
+	
+	LogInfo("🎉 Successfully pulled all %d artifacts!", len(components))
+	return nil
+}
 
-	for i, component := range components {
-		LogInfo("Pulling artifact %d/%d: %s (%s)", i+1, len(components), component.Name, component.Type)
-		
-		if err := pullSingleArtifact(component, outputDir); err != nil {
-			return fmt.Errorf("failed to pull artifact %s: %v", component.Name, err)
+// displayComponentBreakdown displays a breakdown of components by type
+func displayComponentBreakdown(components []Component) {
+	LogInfo("Components breakdown:")
+	
+	imageCount := 0
+	modelCount := 0
+	chartCount := 0
+	for _, comp := range components {
+		switch comp.Type {
+		case "containerImage":
+			imageCount++
+		case "mlModel":
+			modelCount++
+		case "helmChart":
+			chartCount++
 		}
 	}
+	
+	if imageCount > 0 {
+		LogInfo("  - Container Images: %d", imageCount)
+	}
+	if modelCount > 0 {
+		LogInfo("  - ML Models: %d", modelCount)
+	}
+	if chartCount > 0 {
+		LogInfo("  - Helm Charts: %d", chartCount)
+	}
+}
 
-	LogInfo("Successfully pulled all artifacts")
-	return nil
+// pullAllArtifacts pulls all artifacts and returns a summary
+func pullAllArtifacts(components []Component, outputDir string) PullResult {
+	startTime := time.Now()
+	result := PullResult{
+		TotalArtifacts: len(components),
+		SuccessCount:   0,
+		FailedCount:    0,
+		Errors:         []string{},
+	}
+	
+	for i, component := range components {
+		displayArtifactHeader(i+1, len(components), component)
+		
+		artifactStartTime := time.Now()
+		if err := pullSingleArtifact(component, outputDir); err != nil {
+			LogError("❌ Failed to pull artifact %s: %v", component.Name, err)
+			result.FailedCount++
+			result.Errors = append(result.Errors, fmt.Sprintf("%s: %v", component.Name, err))
+		} else {
+			artifactDuration := time.Since(artifactStartTime)
+			LogInfo("✅ Successfully pulled %s in %v", component.Name, artifactDuration)
+			result.SuccessCount++
+		}
+	}
+	
+	result.Duration = time.Since(startTime)
+	return result
+}
+
+// displayArtifactHeader displays the header for each artifact being pulled
+func displayArtifactHeader(current, total int, component Component) {
+	fmt.Println("------------------------------------------------------------")
+	fmt.Printf("Pulling artifact %d/%d: %s (%s)\n", current, total, component.Name, component.Type)
+	fmt.Println("------------------------------------------------------------")
+	LogInfo("")
+	LogInfo("=== Pulling Artifact %d/%d ===", current, total)
+	LogInfo("Name: %s", component.Name)
+	LogInfo("Type: %s", component.Type)
+	LogInfo("URI: %s", component.URI)
+	if component.Tag != "" {
+		LogInfo("Tag: %s", component.Tag)
+	}
+}
+
+// displayPullSummary displays a summary of the pull operation
+func displayPullSummary(result PullResult) {
+	LogInfo("")
+	LogInfo("=== Pull Summary ===")
+	LogInfo("Total time: %v", result.Duration)
+	LogInfo("Successful: %d", result.SuccessCount)
+	LogInfo("Failed: %d", result.FailedCount)
 }
 
 // convertManifestToComponents converts the new manifest format to unified components
 func convertManifestToComponents(manifest *ArtifactManifest) []Component {
 	var components []Component
 
-	// Convert images to components
-	for _, img := range manifest.Images {
-		uri := strings.TrimPrefix(img.Path, "oci://")
+	// Convert images (array of OCI URIs) to components
+	for _, imgURI := range manifest.Images {
+		uri := strings.TrimPrefix(imgURI, "oci://")
 		components = append(components, Component{
-			Name:      img.Name,
+			Name:      extractNameFromURI(uri),
 			Type:      "containerImage",
 			URI:       uri,
-			Tag:       img.Tag,
+			Tag:       "",
 			MediaType: "application/vnd.oci.image.manifest.v1+json",
 		})
 	}
 
-	// Convert models to components
-	for _, model := range manifest.Models {
+	// Convert models (array of OCI URIs) to components
+	for _, modelURI := range manifest.Models {
+		uri := strings.TrimPrefix(modelURI, "oci://")
 		components = append(components, Component{
-			Name:      model.Name,
+			Name:      extractNameFromURI(uri),
 			Type:      "mlModel",
-			URI:       model.Path,
-			Tag:       model.Tag,
+			URI:       uri,
+			Tag:       "",
 			MediaType: "application/vnd.dynamoai.model.v1+tar.gz",
 		})
 	}
 
 	// Convert charts to components
 	for _, chart := range manifest.Charts {
-		uri := strings.TrimPrefix(chart.Path, "oci://")
+		uri := strings.TrimPrefix(chart.HarborPath, "oci://")
 		components = append(components, Component{
 			Name:      chart.Name,
 			Type:      "helmChart",
@@ -144,111 +237,28 @@ func convertManifestToComponents(manifest *ArtifactManifest) []Component {
 	return components
 }
 
+// extractNameFromURI extracts the last part of the path as the name
+func extractNameFromURI(uri string) string {
+	// Remove tag if present
+	parts := strings.Split(uri, ":")
+	path := parts[0]
+	pathParts := strings.Split(path, "/")
+	if len(pathParts) > 0 {
+		return pathParts[len(pathParts)-1]
+	}
+	return uri
+}
+
 // pullSingleArtifact pulls a single artifact from Harbor
 func pullSingleArtifact(component Component, outputDir string) error {
-	// Handle container images using Docker
-	if component.Type == "containerImage" {
-		return pullContainerImage(component)
-	}
-	
-	// Handle Helm charts using helm pull
-	if component.Type == "helmChart" {
+	switch component.Type {
+	case "containerImage":
+		return pullContainerImage(component, outputDir)
+	case "helmChart":
 		return pullHelmChart(component, outputDir)
+	default:
+		return pullOrasArtifact(component, outputDir)
 	}
-	
-	// Handle other artifacts using ORAS
-	return pullOrasArtifact(component, outputDir)
-}
-
-// pullContainerImage pulls a container image using Docker
-func pullContainerImage(component Component) error {
-	var dockerImage string
-	
-	// Use tag if available, otherwise use digest
-	if component.Tag != "" {
-		// Use tag format
-		dockerImage = fmt.Sprintf("%s:%s", component.URI, component.Tag)
-	} else if component.Digest != "" {
-		// Use digest format
-		dockerImage = fmt.Sprintf("%s@%s", component.URI, component.Digest)
-	} else {
-		return fmt.Errorf("neither tag nor digest specified for container image %s", component.Name)
-	}
-	
-	LogInfo("Pulling container image: %s", dockerImage)
-	
-	// Execute docker pull command
-	cmd := exec.Command("docker", "pull", dockerImage)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to pull container image: %v", err)
-	}
-	
-	LogInfo("Successfully pulled container image: %s", dockerImage)
-	return nil
-}
-
-// pullHelmChart pulls a Helm chart using helm pull
-func pullHelmChart(component Component, outputDir string) error {
-	// Construct the helm pull command
-	helmChart := fmt.Sprintf("oci://%s", component.URI)
-	
-	LogInfo("Pulling Helm chart: %s --version %s", helmChart, component.Tag)
-	
-	// Execute helm pull command
-	cmd := exec.Command("helm", "pull", helmChart, "--version", component.Tag, "--destination", outputDir)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to pull Helm chart: %v", err)
-	}
-	
-	LogInfo("Successfully pulled Helm chart: %s", helmChart)
-	return nil
-}
-
-// pullOrasArtifact pulls a non-container artifact using ORAS
-func pullOrasArtifact(component Component, outputDir string) error {
-	uri := component.URI
-	if !strings.Contains(uri, "/") {
-		return fmt.Errorf("invalid URI format: %s", uri)
-	}
-
-	LogInfo("Pulling ORAS artifact from URI: %s", uri)
-
-	var reference string
-	if component.Tag != "" {
-		reference = fmt.Sprintf("%s:%s", uri, component.Tag)
-		LogInfo("Pulling artifact with tag: %s", component.Tag)
-	} else if component.Digest != "" {
-		reference = fmt.Sprintf("%s@%s", uri, component.Digest)
-		LogInfo("Pulling artifact with digest: %s", component.Digest)
-	} else {
-		return fmt.Errorf("neither tag nor digest specified for ORAS artifact %s", component.Name)
-	}
-
-	// Create a descriptive filename for the artifact
-	var artifactPath string
-	if component.Tag != "" {
-		artifactPath = fmt.Sprintf("%s-%s.tar", component.Name, component.Tag)
-	} else {
-		artifactPath = fmt.Sprintf("%s-%s.tar", component.Name, strings.TrimPrefix(component.Digest, "sha256:")[:12])
-	}
-	artifactFullPath := filepath.Join(outputDir, artifactPath)
-
-	LogInfo("Running: oras pull %s -o %s", reference, artifactFullPath)
-	cmd := exec.Command("oras", "pull", reference, "-o", artifactFullPath)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("oras CLI failed: %v", err)
-	}
-
-	LogInfo("Successfully pulled artifact to: %s", artifactFullPath)
-	return nil
 }
 
 // CheckHarborLogin checks if the user is logged into Harbor

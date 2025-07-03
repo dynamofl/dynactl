@@ -11,11 +11,7 @@
     "email": "john.doe@example.com"
   },
   "images": [
-    {
-      "name": "dynamoai-operator",
-      "tag": "latest",
-      "path": "oci://artifacts.dynamo.ai/paypal/dynamoai-operator"
-    }
+    "oci://artifacts.dynamo.ai/paypal/dynamoai-operator"
   ],
   "models": [],
   "charts": []
