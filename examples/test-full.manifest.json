@@ -1,0 +1,69 @@
+{
+  "customer_id": "1f4a8e7e-6c5d-4636-91f0-bf9e72de92c2",
+  "customer_name": "dynamoai",
+  "release_version": "3.22.2",
+  "onboarding_date": "2025-06-24T08:13:22.673045+00:00",
+  "license_generated_at": null,
+  "license_expiry": null,
+  "max_users": null,
+  "spoc": {
+    "name": "N/A",
+    "email": "N/A"
+  },
+  "artifacts": {
+    "charts_root": "oci://artifacts.dynamo.ai/dynamoai/3.22.2/charts/",
+    "images_root": "oci://artifacts.dynamo.ai/dynamoai/images/",
+    "models_root": "oci://artifacts.dynamo.ai/dynamoai/models/"
+  },
+  "charts": [
+    {
+      "name": "dynamoai-base",
+      "version": "1.1.2",
+      "appVersion": "3.22.2",
+      "filename": "dynamoai-base-1.1.2.tgz",
+      "harbor_path": "oci://artifacts.dynamo.ai/dynamoai/3.22.2/charts/dynamoai-base-1.1.2.tgz",
+      "sha256": "80d16aafda6fdf23047a2dd2abcdefad1411f357448b498027e7c15d2539fbe5",
+      "size_bytes": 500684
+    },
+    {
+      "name": "dynamoai-dynamoeval",
+      "version": "1.1.2",
+      "appVersion": "3.22.2",
+      "filename": "dynamoai-dynamoeval-1.1.2.tgz",
+      "harbor_path": "oci://artifacts.dynamo.ai/dynamoai/3.22.2/charts/dynamoai-dynamoeval-1.1.2.tgz",
+      "sha256": "c955eb79c04637a1c64ac2113bb2cc0016c283b56ab19bf0b46d2c8158540e85",
+      "size_bytes": 43488
+    },
+    {
+      "name": "dynamoai-dynamoguard",
+      "version": "1.1.2",
+      "appVersion": "3.22.2",
+      "filename": "dynamoai-dynamoguard-1.1.2.tgz",
+      "harbor_path": "oci://artifacts.dynamo.ai/dynamoai/3.22.2/charts/dynamoai-dynamoguard-1.1.2.tgz",
+      "sha256": "b60d0a80452bce6cd655bb4a5cf1b2b86bb0bca48182efe412770ecd47ce063a",
+      "size_bytes": 38949
+    }
+  ],
+  "images": [
+    "oci://artifacts.dynamo.ai/dynamoai/images/guard-inference:dynamoai-3.22.2",
+    "oci://artifacts.dynamo.ai/dynamoai/images/model-encryption:dynamoai-3.22.2",
+    "oci://artifacts.dynamo.ai/dynamoai/images/output-medium-finetune:dynamoai-3.22.2",
+    "oci://artifacts.dynamo.ai/dynamoai/images/pen-testing:dynamoai-3.22.2",
+    "oci://artifacts.dynamo.ai/dynamoai/images/data-processing:dynamoai-3.22.2",
+    "oci://artifacts.dynamo.ai/dynamoai/images/input-mini-finetune:dynamoai-3.22.2",
+    "oci://artifacts.dynamo.ai/dynamoai/images/off_topic:dynamoai-3.22.2",
+    "oci://artifacts.dynamo.ai/dynamoai/images/dynamoai-api:dynamoai-3.22.2",
+    "oci://artifacts.dynamo.ai/dynamoai/images/multidoc2dial_app:dynamoai-3.22.2",
+    "oci://artifacts.dynamo.ai/dynamoai/images/data-generation:dynamoai-3.22.2",
+    "oci://artifacts.dynamo.ai/dynamoai/images/dynamoai-ui:dynamoai-3.22.2",
+    "oci://artifacts.dynamo.ai/dynamoai/images/moderation:dynamoai-3.22.2",
+    "oci://artifacts.dynamo.ai/dynamoai/images/report-generation:dynamoai-3.22.2",
+    "oci://artifacts.dynamo.ai/dynamoai/images/billing:dynamoai-3.22.2",
+    "oci://artifacts.dynamo.ai/dynamoai/images/db-migrations:dynamoai-3.22.2",
+    "oci://artifacts.dynamo.ai/dynamoai/images/metrics-report:dynamoai-3.22.2",
+    "oci://artifacts.dynamo.ai/dynamoai/images/init-checkers:dynamoai-3.22.2"
+  ],
+  "models": [
+    "oci://artifacts.dynamo.ai/dynamoai/dynamoai-ml_pii_piiredaction_based_version_9:latest"
+  ]
+}

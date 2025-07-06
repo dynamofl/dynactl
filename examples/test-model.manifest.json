@@ -12,11 +12,7 @@
   },
   "images": [],
   "models": [
-    {
-      "name": "base-model",
-      "tag": "latest",
-      "path": "artifacts.dynamo.ai/paypal/sentence-transformers/all-minilm-l6-v2"
-    }
+    "artifacts.dynamo.ai/paypal/sentence-transformers/all-minilm-l6-v2"
   ],
   "charts": []
 }
