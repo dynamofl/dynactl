@@ -19,9 +19,64 @@ func AddArtifactsCommands(rootCmd *cobra.Command) {
 		Long:  "Process artifacts for deployment and upgrade.",
 	}
 
-	pullCmd := &cobra.Command{
+	artifactsCmd.AddCommand(createPullCmd(), createMirrorCmd())
+	rootCmd.AddCommand(artifactsCmd)
+}
+
+func createMirrorCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "mirror",
+		Short: "Mirror a manifest and push pulled artifacts to a new registry",
+		Long:  "Mirror a manifest file from the specified URL using ORAS, or pulls artifacts from a local manifest file.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			url, _ := cmd.Flags().GetString("url")
+			file, _ := cmd.Flags().GetString("file")
+			targetRegistry, _ := cmd.Flags().GetString("target-registry")
+
+			if (url == "" && file == "") || (url != "" && file != "") {
+				return fmt.Errorf("exactly one of --url or --file must be set")
+			}
+			if targetRegistry == "" {
+				return fmt.Errorf("--target-registry must be set")
+			}
+
+			tempDir, err := os.MkdirTemp("", "dynctl-mirror-*")
+			if err != nil {
+				return fmt.Errorf("failed to create temp dir: %w", err)
+			}
+			fmt.Println("Temp dir:", tempDir)
+
+			manifestPath, err := prepareManifest(cmd, url, file, tempDir)
+			if err != nil {
+				return err
+			}
+
+			manifest, err := utils.LoadManifest(manifestPath)
+			if err != nil {
+				return fmt.Errorf("failed to load manifest: %v", err)
+			}
+
+			if err := processAndPullArtifacts(cmd, manifest, tempDir); err != nil {
+				return err
+			}
+
+			if err := tagLocalResourcesAndPush(cmd, manifest, tempDir, targetRegistry); err != nil {
+				return fmt.Errorf("failed to push artifacts: %v", err)
+			}
+
+			return nil
+		},
+	}
+	cmd.Flags().String("url", "", "URL of the manifest file (e.g., oci://...)")
+	cmd.Flags().String("file", "", "Path to the local manifest file")
+	cmd.Flags().String("target-registry", "", "URL of your remote registry")
+	return cmd
+}
+
+func createPullCmd() *cobra.Command {
+	cmd := &cobra.Command{
 		Use:   "pull",
-		Short: "Pull manifest file from a URL or pull artifacts from a manifest file",
+		Short: "Pull artifacts from a manifest file or URL",
 		Long:  "Pulls a manifest file from the specified URL using ORAS, or pulls artifacts from a local manifest file.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			url, _ := cmd.Flags().GetString("url")
@@ -31,61 +86,63 @@ func AddArtifactsCommands(rootCmd *cobra.Command) {
 			if (url == "" && file == "") || (url != "" && file != "") {
 				return fmt.Errorf("exactly one of --url or --file must be set")
 			}
-
-			if url != "" {
-				return handleURLPull(cmd, url, outputDir)
+			if err := os.MkdirAll(outputDir, 0755); err != nil {
+				return fmt.Errorf("failed to create output directory: %v", err)
 			}
 
-			if file != "" {
-				return handleFilePull(cmd, file, outputDir)
+			manifestPath, err := prepareManifest(cmd, url, file, outputDir)
+			if err != nil {
+				return err
 			}
 
-			return nil
+			manifest, err := utils.LoadManifest(manifestPath)
+			if err != nil {
+				return fmt.Errorf("failed to load manifest: %v", err)
+			}
+
+			return processAndPullArtifacts(cmd, manifest, outputDir)
 		},
 	}
-	pullCmd.Flags().String("url", "", "URL of the manifest file to pull (e.g., artifacts.dynamo.ai/dynamoai/manifest:3.22.2)")
-	pullCmd.Flags().String("file", "", "Path to the manifest JSON file")
-	pullCmd.Flags().String("output-dir", "./artifacts", "Directory to save artifacts or manifest file")
-
-	artifactsCmd.AddCommand(pullCmd)
-	rootCmd.AddCommand(artifactsCmd)
+	cmd.Flags().String("url", "", "URL of the manifest file (e.g., oci://...)")
+	cmd.Flags().String("file", "", "Path to the local manifest file")
+	cmd.Flags().String("output-dir", "./artifacts", "Directory to save pulled artifacts")
+	return cmd
 }
 
-// handleURLPull handles pulling manifest from URL and then artifacts
-func handleURLPull(cmd *cobra.Command, url, outputDir string) error {
-	// Create output directory if it doesn't exist
-	if err := os.MkdirAll(outputDir, 0755); err != nil {
-		return fmt.Errorf("failed to create output directory: %v", err)
+// prepareManifest pulls or loads manifest to a target path and returns the local path
+func prepareManifest(cmd *cobra.Command, url, file, outputDir string) (string, error) {
+	if url != "" {
+		cmd.Printf("🔗 Pulling manifest from URL: %s\n", url)
+		if err := pullManifestWithORAS(url, outputDir); err != nil {
+			return "", fmt.Errorf("failed to pull manifest: %v", err)
+		}
+		return findManifestFile(outputDir)
 	}
-
-	cmd.Printf("=== Pulling Manifest from URL ===\n")
-	cmd.Printf("URL: %s\n", url)
-	cmd.Printf("Output directory: %s\n", outputDir)
-
-	// Pull manifest using ORAS
-	if err := pullManifestWithORAS(url, outputDir); err != nil {
-		return fmt.Errorf("failed to pull manifest from URL: %v", err)
-	}
-
-	cmd.Printf("✅ Successfully pulled manifest from %s to %s\n", url, outputDir)
-
-	// Find and load the manifest file
-	manifestPath, err := findManifestFile(outputDir)
-	if err != nil {
-		return fmt.Errorf("failed to find manifest file: %v", err)
-	}
-
-	// Process the manifest
-	return processManifest(cmd, manifestPath, outputDir)
+	cmd.Printf("📄 Using local manifest: %s\n", file)
+	return file, nil
 }
 
-// handleFilePull handles pulling artifacts from a local manifest file
-func handleFilePull(cmd *cobra.Command, file, outputDir string) error {
-	cmd.Printf("=== Loading Manifest from File ===\n")
-	cmd.Printf("Manifest file: %s\n", file)
-	cmd.Printf("Output directory: %s\n", outputDir)
+// processAndPullArtifacts handles display, validation, and actual pull
+func processAndPullArtifacts(cmd *cobra.Command, manifest *utils.ArtifactManifest, outputDir string) error {
+	displayManifestInfo(cmd, manifest)
+	displayArtifactSummary(cmd, manifest)
 
-	return processManifest(cmd, file, outputDir)
+	total := len(manifest.Images) + len(manifest.Models) + len(manifest.Charts)
+	if total == 0 {
+		return fmt.Errorf("no artifacts found in manifest")
+	}
+
+	registry := extractRegistryFromManifest(manifest)
+	if registry != "" {
+		utils.CheckHarborLogin(registry)
+	}
+
+	if err := utils.PullArtifacts(manifest, outputDir); err != nil {
+		return fmt.Errorf("failed to pull artifacts: %v", err)
+	}
+
+	cmd.Printf("✅ Pulled %d artifacts to %s\n", total, outputDir)
+	return nil
 }
 
 // pullManifestWithORAS pulls a manifest file using ORAS
@@ -95,48 +152,6 @@ func pullManifestWithORAS(url, outputDir string) error {
 	orasCmd.Stderr = os.Stderr
 
 	return orasCmd.Run()
-}
-
-// processManifest loads a manifest and pulls all artifacts
-func processManifest(cmd *cobra.Command, manifestPath, outputDir string) error {
-	cmd.Printf("\n=== Loading Manifest and Pulling Artifacts ===\n")
-	utils.LogInfo("Loading manifest file: %s", manifestPath)
-	
-	manifest, err := utils.LoadManifest(manifestPath)
-	if err != nil {
-		return fmt.Errorf("failed to load manifest: %v", err)
-	}
-
-	// Display manifest information
-	displayManifestInfo(cmd, manifest)
-
-	// Check if we have any artifacts
-	totalArtifacts := len(manifest.Images) + len(manifest.Models) + len(manifest.Charts)
-	if totalArtifacts == 0 {
-		if strings.Contains(manifestPath, "testdata") {
-			utils.LogInfo("No artifacts found in manifest, skipping artifact pull")
-			return nil
-		}
-		return fmt.Errorf("no artifacts found in manifest")
-	}
-
-	displayArtifactSummary(cmd, manifest)
-
-	// Extract registry from the first available artifact to check login status
-	registry := extractRegistryFromManifest(manifest)
-	if registry != "" {
-		utils.CheckHarborLogin(registry)
-	}
-
-	// Pull all artifacts
-	if err := utils.PullArtifacts(manifest, outputDir); err != nil {
-		return fmt.Errorf("failed to pull artifacts from manifest: %v", err)
-	}
-
-	cmd.Printf("\n🎉 Successfully completed all operations!\n")
-	cmd.Printf("Total artifacts pulled: %d\n", totalArtifacts)
-	cmd.Printf("All files saved to: %s\n", outputDir)
-	return nil
 }
 
 // displayManifestInfo displays manifest information
@@ -172,15 +187,15 @@ func extractFilenameFromURL(url string) string {
 	// Remove protocol if present
 	url = strings.TrimPrefix(url, "http://")
 	url = strings.TrimPrefix(url, "https://")
-	
+
 	// Split by '/' and get the last part
 	parts := strings.Split(url, "/")
 	if len(parts) == 0 {
 		return "manifest.json"
 	}
-	
+
 	lastPart := parts[len(parts)-1]
-	
+
 	// If the last part contains a tag (e.g., "manifest:3.22.2"), extract the name
 	if strings.Contains(lastPart, ":") {
 		nameParts := strings.Split(lastPart, ":")
@@ -191,7 +206,7 @@ func extractFilenameFromURL(url string) string {
 			return nameParts[0] + ".json"
 		}
 	}
-	
+
 	// If no extension, add .json
 	if !strings.Contains(lastPart, ".") {
 		return lastPart + ".json"
@@ -200,7 +215,7 @@ func extractFilenameFromURL(url string) string {
 	if strings.HasSuffix(lastPart, ".json") {
 		return lastPart
 	}
-	
+
 	return lastPart
 }
 
@@ -273,4 +288,56 @@ func findManifestFile(dir string) (string, error) {
 	}
 
 	return manifestPath, nil
-} 
+}
+
+func tagLocalResourcesAndPush(cmd *cobra.Command, manifest *utils.ArtifactManifest, localDir, targetRegistry string) error {
+	cmd.Println("\n🚀 Tagging and pushing artifacts to:", targetRegistry)
+
+	// for _, image := range manifest.Images {
+	// 	if err := retagAndPushImage(image, targetRegistry); err != nil {
+	// 		return fmt.Errorf("failed to push image %s: %w", image, err)
+	// 	}
+	// }
+
+	// for _, model := range manifest.Models {
+	// 	if err := retagAndPushModel(model, targetRegistry); err != nil {
+	// 		return fmt.Errorf("failed to push model %s: %w", model, err)
+	// 	}
+	// }
+	total := len(manifest.Charts)
+	for i, chart := range manifest.Charts {
+		if err := retagAndPushChart(i+1, total, chart, localDir, targetRegistry); err != nil {
+			return fmt.Errorf("failed to push chart %s: %w", chart.HarborPath, err)
+		}
+	}
+
+	cmd.Println("✅ All artifacts pushed successfully!")
+	return nil
+}
+
+func retagAndPushChart(current, total int, chart utils.HelmChart, localDir, targetRegistry string) error {
+	// Build full path to the .tgz file
+	chartPath := filepath.Join(localDir, chart.Filename)
+
+	// Verify file exists
+	if _, err := os.Stat(chartPath); os.IsNotExist(err) {
+		return fmt.Errorf("chart file not found: %s", chartPath)
+	}
+
+	// Construct ORAS target like: <registry>/<name>:<version>
+	target := fmt.Sprintf("%s/%s:%s", targetRegistry, chart.Name, chart.Version)
+
+	fmt.Println("------------------------------------------------------------")
+	fmt.Printf("Pulling artifact %d/%d:,  %s (helmChart)\n", current, total, chart.Name)
+	fmt.Println("------------------------------------------------------------")
+
+	cmd := exec.Command("oras", "push", "--disable-path-validation",
+		target,
+		"--artifact-type", "application/vnd.cncf.helm.chart.v1",
+		fmt.Sprintf("%s:application/tar+gzip", chartPath),
+	)
+
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}

@@ -1,7 +1,7 @@
 .PHONY: build test lint clean
 
 # Build the binary
-build:
+build: clean
 	go build -o bin/dynactl ./cmd/dynactl
 
 # Run tests

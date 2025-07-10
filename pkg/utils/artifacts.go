@@ -10,18 +10,28 @@ import (
 
 // ArtifactManifest represents the structure of the manifest file
 type ArtifactManifest struct {
-	CustomerID         string    `json:"customer_id"`
-	CustomerName       string    `json:"customer_name"`
-	ReleaseVersion     string    `json:"release_version"`
-	OnboardingDate     string    `json:"onboarding_date"`
-	LicenseGeneratedAt *string   `json:"license_generated_at"`
-	LicenseExpiry      *string   `json:"license_expiry"`
-	MaxUsers           *int      `json:"max_users"`
-	SPOC               SPOC      `json:"spoc"`
-	Artifacts          Artifacts `json:"artifacts"`
-	Images             []string  `json:"images"`  // Array of OCI URIs
-	Models             []string  `json:"models"`  // Array of OCI URIs
-	Charts             []Chart   `json:"charts"`
+	CustomerID         string      `json:"customer_id"`
+	CustomerName       string      `json:"customer_name"`
+	ReleaseVersion     string      `json:"release_version"`
+	OnboardingDate     string      `json:"onboarding_date"`
+	LicenseGeneratedAt *string     `json:"license_generated_at"`
+	LicenseExpiry      *string     `json:"license_expiry"`
+	MaxUsers           *int        `json:"max_users"`
+	SPOC               SPOC        `json:"spoc"`
+	Artifacts          Artifacts   `json:"artifacts"`
+	Images             []string    `json:"images"` // Array of OCI URIs
+	Models             []string    `json:"models"` // Array of OCI URIs
+	Charts             []HelmChart `json:"charts"`
+}
+
+type HelmChart struct {
+	Name       string `json:"name"`
+	Version    string `json:"version"`
+	AppVersion string `json:"appVersion,omitempty"`
+	Filename   string `json:"filename"`
+	HarborPath string `json:"harbor_path"`
+	SHA256     string `json:"sha256,omitempty"`
+	SizeBytes  int64  `json:"size_bytes,omitempty"`
 }
 
 // SPOC represents the Single Point of Contact
@@ -86,36 +96,61 @@ func LoadManifest(filename string) (*ArtifactManifest, error) {
 // PullArtifacts pulls all artifacts specified in the manifest from Harbor
 func PullArtifacts(manifest *ArtifactManifest, outputDir string) error {
 	components := convertManifestToComponents(manifest)
-	
+
 	LogInfo("=== Starting Artifact Pull Process ===")
 	LogInfo("Total artifacts to pull: %d", len(components))
 	LogInfo("Output directory: %s", outputDir)
-	
+
 	// Display component breakdown
 	displayComponentBreakdown(components)
-	
+
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		return fmt.Errorf("failed to create output directory: %v", err)
 	}
-	
+
 	// Pull all artifacts and collect results
 	result := pullAllArtifacts(components, outputDir)
-	
+
 	// Display summary
 	displayPullSummary(result)
-	
+
 	if result.FailedCount > 0 {
 		return fmt.Errorf("failed to pull %d artifacts", result.FailedCount)
 	}
-	
+
 	LogInfo("🎉 Successfully pulled all %d artifacts!", len(components))
+	return nil
+}
+
+// PullArtifacts pulls all artifacts specified in the manifest from Harbor
+func PushArtifacts(manifest *ArtifactManifest, targetRegistry string) error {
+	components := convertManifestToComponents(manifest)
+
+	LogInfo("=== Starting Artifact Push Process ===")
+	LogInfo("Total artifacts to push: %d", len(components))
+	LogInfo("Target registry: %s", targetRegistry)
+
+	// Display component breakdown
+	displayComponentBreakdown(components)
+
+	// Pull all artifacts and collect results
+	result := pushAllArtifacts(components, targetRegistry)
+
+	// Display summary
+	displayPullSummary(result)
+
+	if result.FailedCount > 0 {
+		return fmt.Errorf("failed to push %d artifacts", result.FailedCount)
+	}
+
+	LogInfo("🎉 Successfully pushed all %d artifacts!", len(components))
 	return nil
 }
 
 // displayComponentBreakdown displays a breakdown of components by type
 func displayComponentBreakdown(components []Component) {
 	LogInfo("Components breakdown:")
-	
+
 	imageCount := 0
 	modelCount := 0
 	chartCount := 0
@@ -129,7 +164,7 @@ func displayComponentBreakdown(components []Component) {
 			chartCount++
 		}
 	}
-	
+
 	if imageCount > 0 {
 		LogInfo("  - Container Images: %d", imageCount)
 	}
@@ -150,10 +185,9 @@ func pullAllArtifacts(components []Component, outputDir string) PullResult {
 		FailedCount:    0,
 		Errors:         []string{},
 	}
-	
+
 	for i, component := range components {
 		displayArtifactHeader(i+1, len(components), component)
-		
 		artifactStartTime := time.Now()
 		if err := pullSingleArtifact(component, outputDir); err != nil {
 			LogError("❌ Failed to pull artifact %s: %v", component.Name, err)
@@ -165,7 +199,35 @@ func pullAllArtifacts(components []Component, outputDir string) PullResult {
 			result.SuccessCount++
 		}
 	}
-	
+
+	result.Duration = time.Since(startTime)
+	return result
+}
+
+func pushAllArtifacts(components []Component, targetRegistry string) PullResult {
+	startTime := time.Now()
+	result := PullResult{
+		TotalArtifacts: len(components),
+		SuccessCount:   0,
+		FailedCount:    0,
+		Errors:         []string{},
+	}
+
+	for i, component := range components {
+		displayArtifactHeader(i+1, len(components), component)
+
+		artifactStartTime := time.Now()
+		if err := pushSingleArtifact(component, targetRegistry); err != nil {
+			LogError("❌ Failed to push artifact %s: %v", component.Name, err)
+			result.FailedCount++
+			result.Errors = append(result.Errors, fmt.Sprintf("%s: %v", component.Name, err))
+		} else {
+			artifactDuration := time.Since(artifactStartTime)
+			LogInfo("✅ Successfully pushed %s in %v", component.Name, artifactDuration)
+			result.SuccessCount++
+		}
+	}
+
 	result.Duration = time.Since(startTime)
 	return result
 }
@@ -261,9 +323,21 @@ func pullSingleArtifact(component Component, outputDir string) error {
 	}
 }
 
+// pushSingleArtifact pushes a single artifact to target registry
+func pushSingleArtifact(component Component, targetRegistry string) error {
+	switch component.Type {
+	case "containerImage":
+		return pushContainerImage(component, targetRegistry)
+	case "helmChart":
+		return pushHelmChart(component, targetRegistry)
+	default:
+		return pushOrasArtifact(component, targetRegistry)
+	}
+}
+
 // CheckHarborLogin checks if the user is logged into Harbor
 func CheckHarborLogin(registry string) error {
 	LogInfo("Checking Harbor login status for registry: %s", registry)
 	LogInfo("If you have trouble pulling artifacts, run: oras login %s", registry)
 	return nil
-} 
+}
