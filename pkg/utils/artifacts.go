@@ -123,29 +123,29 @@ func PullArtifacts(manifest *ArtifactManifest, outputDir string) error {
 }
 
 // PullArtifacts pulls all artifacts specified in the manifest from Harbor
-func PushArtifacts(manifest *ArtifactManifest, targetRegistry string) error {
-	components := convertManifestToComponents(manifest)
+// func PushArtifacts(manifest *ArtifactManifest, targetRegistry string) error {
+// 	components := convertManifestToComponents(manifest)
 
-	LogInfo("=== Starting Artifact Push Process ===")
-	LogInfo("Total artifacts to push: %d", len(components))
-	LogInfo("Target registry: %s", targetRegistry)
+// 	LogInfo("=== Starting Artifact Push Process ===")
+// 	LogInfo("Total artifacts to push: %d", len(components))
+// 	LogInfo("Target registry: %s", targetRegistry)
 
-	// Display component breakdown
-	displayComponentBreakdown(components)
+// 	// Display component breakdown
+// 	displayComponentBreakdown(components)
 
-	// Pull all artifacts and collect results
-	result := pushAllArtifacts(components, targetRegistry)
+// 	// Pull all artifacts and collect results
+// 	result := pushAllArtifacts(components, targetRegistry)
 
-	// Display summary
-	displayPullSummary(result)
+// 	// Display summary
+// 	displayPullSummary(result)
 
-	if result.FailedCount > 0 {
-		return fmt.Errorf("failed to push %d artifacts", result.FailedCount)
-	}
+// 	if result.FailedCount > 0 {
+// 		return fmt.Errorf("failed to push %d artifacts", result.FailedCount)
+// 	}
 
-	LogInfo("🎉 Successfully pushed all %d artifacts!", len(components))
-	return nil
-}
+// 	LogInfo("🎉 Successfully pushed all %d artifacts!", len(components))
+// 	return nil
+// }
 
 // displayComponentBreakdown displays a breakdown of components by type
 func displayComponentBreakdown(components []Component) {
@@ -204,33 +204,33 @@ func pullAllArtifacts(components []Component, outputDir string) PullResult {
 	return result
 }
 
-func pushAllArtifacts(components []Component, targetRegistry string) PullResult {
-	startTime := time.Now()
-	result := PullResult{
-		TotalArtifacts: len(components),
-		SuccessCount:   0,
-		FailedCount:    0,
-		Errors:         []string{},
-	}
+// func pushAllArtifacts(components []Component, targetRegistry string) PullResult {
+// 	startTime := time.Now()
+// 	result := PullResult{
+// 		TotalArtifacts: len(components),
+// 		SuccessCount:   0,
+// 		FailedCount:    0,
+// 		Errors:         []string{},
+// 	}
 
-	for i, component := range components {
-		displayArtifactHeader(i+1, len(components), component)
+// 	for i, component := range components {
+// 		displayArtifactHeader(i+1, len(components), component)
 
-		artifactStartTime := time.Now()
-		if err := pushSingleArtifact(component, targetRegistry); err != nil {
-			LogError("❌ Failed to push artifact %s: %v", component.Name, err)
-			result.FailedCount++
-			result.Errors = append(result.Errors, fmt.Sprintf("%s: %v", component.Name, err))
-		} else {
-			artifactDuration := time.Since(artifactStartTime)
-			LogInfo("✅ Successfully pushed %s in %v", component.Name, artifactDuration)
-			result.SuccessCount++
-		}
-	}
+// 		artifactStartTime := time.Now()
+// 		if err := pushSingleArtifact(component, targetRegistry); err != nil {
+// 			LogError("❌ Failed to push artifact %s: %v", component.Name, err)
+// 			result.FailedCount++
+// 			result.Errors = append(result.Errors, fmt.Sprintf("%s: %v", component.Name, err))
+// 		} else {
+// 			artifactDuration := time.Since(artifactStartTime)
+// 			LogInfo("✅ Successfully pushed %s in %v", component.Name, artifactDuration)
+// 			result.SuccessCount++
+// 		}
+// 	}
 
-	result.Duration = time.Since(startTime)
-	return result
-}
+// 	result.Duration = time.Since(startTime)
+// 	return result
+// }
 
 // displayArtifactHeader displays the header for each artifact being pulled
 func displayArtifactHeader(current, total int, component Component) {
@@ -323,17 +323,17 @@ func pullSingleArtifact(component Component, outputDir string) error {
 	}
 }
 
-// pushSingleArtifact pushes a single artifact to target registry
-func pushSingleArtifact(component Component, targetRegistry string) error {
-	switch component.Type {
-	case "containerImage":
-		return pushContainerImage(component, targetRegistry)
-	case "helmChart":
-		return pushHelmChart(component, targetRegistry)
-	default:
-		return pushOrasArtifact(component, targetRegistry)
-	}
-}
+// // pushSingleArtifact pushes a single artifact to target registry
+// func pushSingleArtifact(component Component, targetRegistry string) error {
+// 	switch component.Type {
+// 	case "containerImage":
+// 		return pushContainerImage(component, targetRegistry)
+// 	case "helmChart":
+// 		return pushHelmChart(component, targetRegistry)
+// 	default:
+// 		return pushOrasArtifact(component, targetRegistry)
+// 	}
+// }
 
 // CheckHarborLogin checks if the user is logged into Harbor
 func CheckHarborLogin(registry string) error {

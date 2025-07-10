@@ -293,51 +293,25 @@ func findManifestFile(dir string) (string, error) {
 func tagLocalResourcesAndPush(cmd *cobra.Command, manifest *utils.ArtifactManifest, localDir, targetRegistry string) error {
 	cmd.Println("\n🚀 Tagging and pushing artifacts to:", targetRegistry)
 
-	// for _, image := range manifest.Images {
-	// 	if err := retagAndPushImage(image, targetRegistry); err != nil {
-	// 		return fmt.Errorf("failed to push image %s: %w", image, err)
-	// 	}
-	// }
-
-	// for _, model := range manifest.Models {
-	// 	if err := retagAndPushModel(model, targetRegistry); err != nil {
-	// 		return fmt.Errorf("failed to push model %s: %w", model, err)
-	// 	}
-	// }
-	total := len(manifest.Charts)
+	totalImages := len(manifest.Images)
+	for i, image := range manifest.Images {
+		if err := utils.RetagAndPushImage(i+1, totalImages, image, localDir, targetRegistry); err != nil {
+			return fmt.Errorf("failed to push image %s: %w", image, err)
+		}
+	}
+	totalModels := len(manifest.Models)
+	for i, model := range manifest.Models {
+		if err := utils.RetagAndPushModel(i+1, totalModels, model, localDir, targetRegistry); err != nil {
+			return fmt.Errorf("failed to push model %s: %w", model, err)
+		}
+	}
+	totalCharts := len(manifest.Charts)
 	for i, chart := range manifest.Charts {
-		if err := retagAndPushChart(i+1, total, chart, localDir, targetRegistry); err != nil {
+		if err := utils.RetagAndPushChart(i+1, totalCharts, chart, localDir, targetRegistry); err != nil {
 			return fmt.Errorf("failed to push chart %s: %w", chart.HarborPath, err)
 		}
 	}
 
 	cmd.Println("✅ All artifacts pushed successfully!")
 	return nil
-}
-
-func retagAndPushChart(current, total int, chart utils.HelmChart, localDir, targetRegistry string) error {
-	// Build full path to the .tgz file
-	chartPath := filepath.Join(localDir, chart.Filename)
-
-	// Verify file exists
-	if _, err := os.Stat(chartPath); os.IsNotExist(err) {
-		return fmt.Errorf("chart file not found: %s", chartPath)
-	}
-
-	// Construct ORAS target like: <registry>/<name>:<version>
-	target := fmt.Sprintf("%s/%s:%s", targetRegistry, chart.Name, chart.Version)
-
-	fmt.Println("------------------------------------------------------------")
-	fmt.Printf("Pulling artifact %d/%d:,  %s (helmChart)\n", current, total, chart.Name)
-	fmt.Println("------------------------------------------------------------")
-
-	cmd := exec.Command("oras", "push", "--disable-path-validation",
-		target,
-		"--artifact-type", "application/vnd.cncf.helm.chart.v1",
-		fmt.Sprintf("%s:application/tar+gzip", chartPath),
-	)
-
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
 }
