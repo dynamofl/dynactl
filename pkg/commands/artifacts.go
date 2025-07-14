@@ -19,8 +19,58 @@ func AddArtifactsCommands(rootCmd *cobra.Command) {
 		Long:  "Process artifacts for deployment and upgrade.",
 	}
 
-	artifactsCmd.AddCommand(createPullCmd(), createMirrorCmd())
+	artifactsCmd.AddCommand(createPullCmd(), createMirrorCmd(), createExportCmd())
 	rootCmd.AddCommand(artifactsCmd)
+}
+
+func createExportCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "export",
+		Short: "Export artifacts from a manifest file or URL to a local cache",
+		Long:  "Export a manifest file from the specified URL using ORAS, or exports artifacts from a local manifest file to a single local cache(tarball).",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			url, _ := cmd.Flags().GetString("url")
+			file, _ := cmd.Flags().GetString("file")
+			archiveFile, _ := cmd.Flags().GetString("archive-file")
+
+			if (url == "" && file == "") || (url != "" && file != "") {
+				return fmt.Errorf("exactly one of --url or --file must be set")
+			}
+
+			if archiveFile == "" {
+				return fmt.Errorf("must set --archive-file")
+			}
+
+			tempDir, err := os.MkdirTemp("", "dynctl-export-*")
+			if err != nil {
+				return fmt.Errorf("failed to create temp dir: %w", err)
+			}
+
+			manifestPath, err := prepareManifest(cmd, url, file, tempDir)
+			if err != nil {
+				return err
+			}
+
+			manifest, err := utils.LoadManifest(manifestPath)
+			if err != nil {
+				return fmt.Errorf("failed to load manifest: %v", err)
+			}
+
+			if err := processAndPullArtifacts(cmd, manifest, tempDir); err != nil {
+				return fmt.Errorf("failed to process manifest and pull artifacts: %v", err)
+			}
+
+			if err := utils.ExportArtifacts(tempDir, archiveFile); err != nil {
+				return fmt.Errorf("failed to export artifacts: %v", err)
+			}
+
+			return nil
+		},
+	}
+	cmd.Flags().String("url", "", "URL of the manifest file (e.g., oci://...)")
+	cmd.Flags().String("file", "", "Path to the local manifest file")
+	cmd.Flags().String("archive-file", "", "Path to tarball, <path.tar.gz>")
+	return cmd
 }
 
 func createMirrorCmd() *cobra.Command {
@@ -44,7 +94,6 @@ func createMirrorCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to create temp dir: %w", err)
 			}
-			fmt.Println("Temp dir:", tempDir)
 
 			manifestPath, err := prepareManifest(cmd, url, file, tempDir)
 			if err != nil {
