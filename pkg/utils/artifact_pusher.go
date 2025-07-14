@@ -51,10 +51,6 @@ func RetagAndPushImage(current, total int, image string, localDir string, target
 		target = fmt.Sprintf("%s/images/%s:%s", targetRegistry, imageName, imageTag)
 	}
 
-	// // Construct target path
-	// target := fmt.Sprintf("%s/%s:%s", targetRegistry, imageName, imageTag)
-	// target := fmt.Sprintf("%s:%s", path.Join(targetRegistry, imageName), imageTag)
-
 	fmt.Println("------------------------------------------------------------")
 	fmt.Printf("Pushing image %d/%d:  %s (containerImage)\n", current, total, imageName)
 	fmt.Println("------------------------------------------------------------")
@@ -91,9 +87,6 @@ func RetagAndPushChart(current, total int, chart HelmChart, localDir, targetRegi
 		// Preserve full structure
 		target = fmt.Sprintf("%s/%s:%s", targetRegistry, chart.Name, chart.Version)
 	}
-
-	// Construct ORAS target like: <registry>/<name>:<version>
-	// target := fmt.Sprintf("%s/%s:%s", targetRegistry, chart.Name, chart.Version)
 
 	fmt.Println("------------------------------------------------------------")
 	fmt.Printf("Pushing artifact %d/%d:  %s (helmChart)\n", current, total, chart.Name)
@@ -151,9 +144,6 @@ func RetagAndPushModel(current, total int, model string, localDir, targetRegistr
 		// Preserve full structure
 		target = fmt.Sprintf("%s/%s:%s", targetRegistry, modelName, modelTag)
 	}
-
-	// Compose the target registry path
-	// target := fmt.Sprintf("%s/%s:%s", targetRegistry, modelName, modelTag)
 
 	fmt.Println("------------------------------------------------------------")
 	fmt.Printf("Pushing model %d/%d: %s:%s\n", current, total, modelName, modelTag)
