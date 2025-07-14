@@ -19,14 +19,66 @@ func AddArtifactsCommands(rootCmd *cobra.Command) {
 		Long:  "Process artifacts for deployment and upgrade.",
 	}
 
-	artifactsCmd.AddCommand(createPullCmd(), createMirrorCmd(), createExportCmd())
+	artifactsCmd.AddCommand(createPullCmd(), createMirrorCmd(), createExportCmd(), createImportCmd())
 	rootCmd.AddCommand(artifactsCmd)
+}
+
+func createImportCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "import",
+		Short: "Import artifacts from local cache(tarball) to target registry",
+		Long:  "Import artifacts from local cache(tarball) to remote target registry",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			targetRegistry, _ := cmd.Flags().GetString("target-registry")
+			archiveFile, _ := cmd.Flags().GetString("archive-file")
+
+			if archiveFile == "" {
+				return fmt.Errorf("--archive-file must be set")
+			}
+			if targetRegistry == "" {
+				return fmt.Errorf("--target-registry must be set")
+			}
+
+			// Step 1: Extract archive
+			tempDir, err := os.MkdirTemp("", "dynctl-import-*")
+			if err != nil {
+				return fmt.Errorf("failed to create temp dir: %w", err)
+			}
+			// defer os.RemoveAll(tempDir)
+
+			cmd.Println("📄 Extracting existing tarball", archiveFile)
+
+			if err := utils.ExtractArchive(archiveFile, tempDir); err != nil {
+				return fmt.Errorf("failed to extract archive: %w", err)
+			}
+
+			// Step 2: Load manifest and display
+			manifestPath := filepath.Join(tempDir, "manifest.json")
+			manifest, err := utils.LoadManifest(manifestPath)
+			if err != nil {
+				return fmt.Errorf("failed to load manifest: %v", err)
+			}
+
+			displayManifestInfo(cmd, manifest)
+
+			// Step 3: Push artifacts
+			if err := tagLocalResourcesAndPush(cmd, manifest, tempDir, targetRegistry); err != nil {
+				return fmt.Errorf("failed to push artifacts: %v", err)
+			}
+
+			return nil
+		},
+	}
+	cmd.Flags().String("archive-file", "", "Path to local cache(tarball)")
+	cmd.Flags().String("target-registry", "", "URL of your remote registry")
+	return cmd
+
 }
 
 func createExportCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "export",
-		Short: "Export artifacts from a manifest file or URL to a local cache",
+		Short: "Export artifacts from a manifest file or URL to a local cache(tarball)",
 		Long:  "Export a manifest file from the specified URL using ORAS, or exports artifacts from a local manifest file to a single local cache(tarball).",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			url, _ := cmd.Flags().GetString("url")
@@ -60,7 +112,7 @@ func createExportCmd() *cobra.Command {
 				return fmt.Errorf("failed to process manifest and pull artifacts: %v", err)
 			}
 
-			if err := utils.ExportArtifacts(tempDir, archiveFile); err != nil {
+			if err := utils.ExportArtifacts(manifest, tempDir, archiveFile); err != nil {
 				return fmt.Errorf("failed to export artifacts: %v", err)
 			}
 

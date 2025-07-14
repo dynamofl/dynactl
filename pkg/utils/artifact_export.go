@@ -3,6 +3,7 @@ package utils
 import (
 	"archive/tar"
 	"compress/gzip"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -10,7 +11,7 @@ import (
 	"strings"
 )
 
-func ExportArtifacts(tempDir, archiveFile string) error {
+func ExportArtifacts(manifest *ArtifactManifest, tempDir, archiveFile string) error {
 	if !strings.HasSuffix(archiveFile, ".tar.gz") {
 		archiveFile += ".tar.gz"
 	}
@@ -26,6 +27,16 @@ func ExportArtifacts(tempDir, archiveFile string) error {
 
 	tw := tar.NewWriter(gz)
 	defer tw.Close()
+
+	// save manifest to the tempDir
+	manifestPath := filepath.Join(tempDir, "manifest.json")
+	manifestBytes, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal manifest: %w", err)
+	}
+	if err := os.WriteFile(manifestPath, manifestBytes, 0644); err != nil {
+		return fmt.Errorf("failed to write manifest to temp dir: %w", err)
+	}
 
 	// recursively traverse through each file in the tempDir
 	return filepath.Walk(tempDir, func(path string, info os.FileInfo, err error) error {
@@ -64,4 +75,55 @@ func ExportArtifacts(tempDir, archiveFile string) error {
 		_, err = io.Copy(tw, file)
 		return err
 	})
+}
+
+func ExtractArchive(archiveFile, destDir string) error {
+	f, err := os.Open(archiveFile)
+	if err != nil {
+		return fmt.Errorf("failed to open archive: %w", err)
+	}
+	defer f.Close()
+
+	gzReader, err := gzip.NewReader(f)
+	if err != nil {
+		return fmt.Errorf("failed to create gzip reader: %w", err)
+	}
+	defer gzReader.Close()
+
+	tarReader := tar.NewReader(gzReader)
+	for {
+		header, err := tarReader.Next()
+		if err == io.EOF {
+			break // End of archive
+		}
+		if err != nil {
+			return fmt.Errorf("error reading tar archive: %w", err)
+		}
+
+		targetPath := filepath.Join(destDir, header.Name)
+
+		switch header.Typeflag {
+		case tar.TypeDir:
+			if err := os.MkdirAll(targetPath, os.FileMode(header.Mode)); err != nil {
+				return fmt.Errorf("failed to create directory: %w", err)
+			}
+		case tar.TypeReg:
+			if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+				return err
+			}
+			outFile, err := os.Create(targetPath)
+			if err != nil {
+				return fmt.Errorf("failed to create file: %w", err)
+			}
+			if _, err := io.Copy(outFile, tarReader); err != nil {
+				outFile.Close()
+				return fmt.Errorf("failed to copy file: %w", err)
+			}
+			outFile.Close()
+		default:
+			return fmt.Errorf("unsupported file type in tar: %c", header.Typeflag)
+		}
+	}
+
+	return nil
 }
