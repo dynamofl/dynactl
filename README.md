@@ -198,6 +198,41 @@ Checking cluster status for namespace: my-namespace
 ✓ Cluster check completed successfully
 ```
 
+### `dynactl guard models list -n <namespace> [--output json]`
+
+List deployments in a namespace with per-container resource requests and limits for CPU, memory, and GPUs (`nvidia.com/gpu`).
+
+**Example:**
+```bash
+$ dynactl guard models list -n my-namespace
+Namespace: my-namespace
+Deployment / Container                          Requests (cpu/mem/gpu)         Limits (cpu/mem/gpu)
+----------------------------------------------------------------------------------------------
+guard-api guard-container                        250m/256Mi/-                   500m/512Mi/-
+guard-worker worker                              500m/1Gi/1                     1/2Gi/1
+```
+
+JSON output:
+```bash
+$ dynactl guard models list -n my-namespace --output json
+[
+  {
+    "Name": "guard-api",
+    "Containers": [
+      {
+        "Name": "guard-container",
+        "RequestsCPU": "250m",
+        "RequestsMemory": "256Mi",
+        "RequestsGPU": "0",
+        "LimitsCPU": "500m",
+        "LimitsMemory": "512Mi",
+        "LimitsGPU": "0"
+      }
+    ]
+  }
+]
+```
+
 ## Future Work
 
 The following features are planned for future releases:

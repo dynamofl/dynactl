@@ -92,8 +92,8 @@ func AddClusterCommands(rootCmd *cobra.Command) {
 		},
 	}
 
-	// Add namespace flag
-	checkCmd.Flags().String("namespace", "", "Namespace to check (will be created if it doesn't exist)")
+    // Add namespace flag (supports -n)
+    checkCmd.Flags().StringP("namespace", "n", "", "Namespace to check (will be created if it doesn't exist)")
 	checkCmd.MarkFlagRequired("namespace")
 
 	// Add commands to cluster group
