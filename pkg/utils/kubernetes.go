@@ -29,11 +29,13 @@ func NewKubernetesChecker() (*KubernetesChecker, error) {
 	// Try to load in-cluster config first, then fall back to kubeconfig
 	config, err := rest.InClusterConfig()
 	if err != nil {
-		// Fall back to kubeconfig
-		config, err = clientcmd.BuildConfigFromFlags("", clientcmd.RecommendedHomeFile)
-		if err != nil {
-			return nil, fmt.Errorf("failed to load kubeconfig: %v", err)
-		}
+        // Fall back to kubeconfig respecting KUBECONFIG and default loading rules
+        loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
+        kubeCfg := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, &clientcmd.ConfigOverrides{})
+        config, err = kubeCfg.ClientConfig()
+        if err != nil {
+            return nil, fmt.Errorf("failed to load kubeconfig: %v", err)
+        }
 	}
 
 	clientset, err := kubernetes.NewForConfig(config)
@@ -437,3 +439,84 @@ func (kc *KubernetesChecker) CheckStorageCapacity() (string, error) {
 func int32Ptr(i int32) *int32 {
 	return &i
 } 
+
+// ContainerResourceSummary holds resource info for a container
+type ContainerResourceSummary struct {
+    Name           string
+    RequestsCPU    string
+    RequestsMemory string
+    RequestsGPU    string
+    LimitsCPU      string
+    LimitsMemory   string
+    LimitsGPU      string
+}
+
+// DeploymentResourceSummary holds resource info for a deployment
+type DeploymentResourceSummary struct {
+    Name       string
+    Pods       int32
+    Containers []ContainerResourceSummary
+}
+
+// ListDeploymentResourceSummaries lists deployments and summarizes container resource requests/limits
+func (kc *KubernetesChecker) ListDeploymentResourceSummaries(namespace string) ([]DeploymentResourceSummary, error) {
+    deployments, err := kc.clientset.AppsV1().Deployments(namespace).List(context.Background(), metav1.ListOptions{})
+    if err != nil {
+        return nil, fmt.Errorf("failed to list deployments in %s: %v", namespace, err)
+    }
+
+    summaries := make([]DeploymentResourceSummary, 0, len(deployments.Items))
+
+    for _, d := range deployments.Items {
+        depSummary := DeploymentResourceSummary{
+            Name:       d.Name,
+            Pods:       d.Status.Replicas,
+            Containers: make([]ContainerResourceSummary, 0, len(d.Spec.Template.Spec.Containers)),
+        }
+        for _, c := range d.Spec.Template.Spec.Containers {
+            req := c.Resources.Requests
+            lim := c.Resources.Limits
+
+            // CPU
+            var reqCPU, limCPU string
+            if q, ok := req[corev1.ResourceCPU]; ok {
+                reqCPU = q.String()
+            }
+            if q, ok := lim[corev1.ResourceCPU]; ok {
+                limCPU = q.String()
+            }
+
+            // Memory
+            var reqMem, limMem string
+            if q, ok := req[corev1.ResourceMemory]; ok {
+                reqMem = q.String()
+            }
+            if q, ok := lim[corev1.ResourceMemory]; ok {
+                limMem = q.String()
+            }
+
+            // GPU (nvidia.com/gpu)
+            var reqGPU, limGPU string
+            gpuRes := corev1.ResourceName("nvidia.com/gpu")
+            if q, ok := req[gpuRes]; ok {
+                reqGPU = q.String()
+            }
+            if q, ok := lim[gpuRes]; ok {
+                limGPU = q.String()
+            }
+
+            depSummary.Containers = append(depSummary.Containers, ContainerResourceSummary{
+                Name:           c.Name,
+                RequestsCPU:    reqCPU,
+                RequestsMemory: reqMem,
+                RequestsGPU:    reqGPU,
+                LimitsCPU:      limCPU,
+                LimitsMemory:   limMem,
+                LimitsGPU:      limGPU,
+            })
+        }
+        summaries = append(summaries, depSummary)
+    }
+
+    return summaries, nil
+}
