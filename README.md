@@ -174,28 +174,47 @@ Artifacts found in manifest:
 
 Handle cluster status and validation.
 
-#### `dynactl cluster check --namespace <namespace>`
+#### `dynactl cluster all check --namespace <namespace>`
 
-Performs comprehensive cluster validation including:
+Runs all available cluster checks:
 
 - **Kubernetes Version**: Checks compatibility with required version
-- **Resource Availability**: Validates CPU and memory requirements (32+ vCPU, 128+ GB memory)
-- **Namespace RBAC**: Verifies permissions for deployments, PVCs, services, configmaps, and secrets
-- **Cluster RBAC**: Checks cluster-level permissions for CRD creation
+- **Node Resources**: Aggregated CPU and memory across ready nodes
+- **Namespace Permissions**: Uses authorization API (SelfSubjectAccessReview) to validate create permissions for deployments, PVCs, services, configmaps, secrets
+- **Cluster Permissions**: Uses authorization API to validate permission to create CRDs
+- **StorageClasses**: Checks for common database-compatible provisioners
 - **Storage Capacity**: Assesses available storage and usage
 
 **Example:**
 ```bash
-$ dynactl cluster check --namespace my-namespace
-Checking cluster status for namespace: my-namespace
+$ dynactl cluster all check --namespace my-namespace
+```
 
-✓ Kubernetes version: 1.24.6 (compatible)
-✓ Available resources: 24/24 CPU cores, 96/96 GB memory (allocatable/total)
-✓ RBAC permissions: all required permissions available
-✓ Cluster RBAC permissions: all required cluster permissions available
-✓ Storage capacity: adequate storage capacity (45.2% used)
+#### `dynactl cluster node check`
 
-✓ Cluster check completed successfully
+Checks node readiness and aggregated CPU/memory resources. No namespace required.
+
+**Example:**
+```bash
+$ dynactl cluster node check
+```
+
+#### `dynactl cluster permission check --namespace <namespace>`
+
+Checks permissions in a namespace and at cluster level using the authorization API.
+
+**Example:**
+```bash
+$ dynactl cluster permission check --namespace my-namespace
+```
+
+#### `dynactl cluster storage check`
+
+Checks StorageClasses for database compatibility and storage capacity.
+
+**Example:**
+```bash
+$ dynactl cluster storage check
 ```
 
 ### `dynactl guard models list -n <namespace> [--output json]`
