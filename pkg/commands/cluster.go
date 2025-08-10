@@ -43,7 +43,7 @@ func AddClusterCommands(rootCmd *cobra.Command) {
             }
 
             // Nodes/resources
-            resources, err := kc.CheckResources()
+            resources, err := kc.CheckResources("table")
             if err != nil {
                 cmd.Printf("✗ Node resources: %s\n", resources)
             } else {
@@ -110,7 +110,11 @@ func AddClusterCommands(rootCmd *cobra.Command) {
                 cmd.Printf("✗ Failed to connect to Kubernetes cluster: %v\n", err)
                 return err
             }
-            resources, err := kc.CheckResources()
+            
+            outputFormat, _ := cmd.Flags().GetString("output")
+            
+            cmd.Println("Checking node resources...")
+            resources, err := kc.CheckResources(outputFormat)
             if err != nil {
                 cmd.Printf("✗ Node resources: %s\n", resources)
                 return err
@@ -119,6 +123,7 @@ func AddClusterCommands(rootCmd *cobra.Command) {
             return nil
         },
     }
+    nodeCheckCmd.Flags().StringP("output", "o", "table", "Output format: table or csv")
     nodeCmd.AddCommand(nodeCheckCmd)
 
     // 'permission check' - namespace and cluster RBAC, namespace required
