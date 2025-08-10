@@ -3,6 +3,7 @@ package utils
 import (
     "context"
     "fmt"
+    "sort"
     "strings"
 
     authorizationv1 "k8s.io/api/authorization/v1"
@@ -53,19 +54,153 @@ func (kc *KubernetesChecker) CheckKubernetesVersion() (string, error) {
 	return version.GitVersion, nil
 }
 
+// NodeResourceUsage holds resource usage information for a node
+type NodeResourceUsage struct {
+	Name           string
+	CPURequests    float64
+	CPULimits      float64
+	MemoryRequests float64
+	MemoryLimits   float64
+	GPURequests    int64
+	GPULimits      int64
+	CPUAllocatable float64
+	MemoryAllocatable float64
+	GPUAllocatable int64
+	CPURequestsPercent float64
+	CPULimitsPercent float64
+	MemoryRequestsPercent float64
+	MemoryLimitsPercent float64
+}
+
+// GetNodeResourceUsage calculates resource usage percentages for a specific node
+func (kc *KubernetesChecker) GetNodeResourceUsage(nodeName string) (*NodeResourceUsage, error) {
+	// Get all pods in all namespaces to calculate resource usage
+	pods, err := kc.clientset.CoreV1().Pods("").List(context.Background(), metav1.ListOptions{
+		FieldSelector: "spec.nodeName=" + nodeName,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list pods for node %s: %v", nodeName, err)
+	}
+
+	// Get node information
+	node, err := kc.clientset.CoreV1().Nodes().Get(context.Background(), nodeName, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get node %s: %v", nodeName, err)
+	}
+
+	usage := &NodeResourceUsage{
+		Name: nodeName,
+	}
+
+	// Get allocatable resources
+	if cpu, ok := node.Status.Allocatable[corev1.ResourceCPU]; ok {
+		usage.CPUAllocatable = float64((&cpu).MilliValue()) / 1000.0
+	}
+	if memory, ok := node.Status.Allocatable[corev1.ResourceMemory]; ok {
+		usage.MemoryAllocatable = float64((&memory).Value()) / (1024.0 * 1024.0 * 1024.0)
+	}
+	if gpu, ok := node.Status.Allocatable[corev1.ResourceName("nvidia.com/gpu")]; ok {
+		usage.GPUAllocatable = (&gpu).Value()
+	}
+
+	// Calculate resource usage from pods
+	for _, pod := range pods.Items {
+		// Skip pods that are not running or are being terminated
+		if pod.Status.Phase != corev1.PodRunning && pod.Status.Phase != corev1.PodPending {
+			continue
+		}
+
+		for _, container := range pod.Spec.Containers {
+			// CPU requests and limits
+			if req, ok := container.Resources.Requests[corev1.ResourceCPU]; ok {
+				usage.CPURequests += float64((&req).MilliValue()) / 1000.0
+			}
+			if lim, ok := container.Resources.Limits[corev1.ResourceCPU]; ok {
+				usage.CPULimits += float64((&lim).MilliValue()) / 1000.0
+			}
+
+			// Memory requests and limits
+			if req, ok := container.Resources.Requests[corev1.ResourceMemory]; ok {
+				usage.MemoryRequests += float64((&req).Value()) / (1024.0 * 1024.0 * 1024.0)
+			}
+			if lim, ok := container.Resources.Limits[corev1.ResourceMemory]; ok {
+				usage.MemoryLimits += float64((&lim).Value()) / (1024.0 * 1024.0 * 1024.0)
+			}
+
+			// GPU requests and limits
+			if req, ok := container.Resources.Requests[corev1.ResourceName("nvidia.com/gpu")]; ok {
+				usage.GPURequests += (&req).Value()
+			}
+			if lim, ok := container.Resources.Limits[corev1.ResourceName("nvidia.com/gpu")]; ok {
+				usage.GPULimits += (&lim).Value()
+			}
+		}
+	}
+
+	if usage.CPUAllocatable > 0 {
+		usage.CPURequestsPercent = usage.CPURequests / usage.CPUAllocatable * 100
+		usage.CPULimitsPercent = usage.CPULimits / usage.CPUAllocatable * 100
+	}
+	if usage.MemoryAllocatable > 0 {
+		usage.MemoryRequestsPercent = usage.MemoryRequests / usage.MemoryAllocatable * 100
+		usage.MemoryLimitsPercent = usage.MemoryLimits / usage.MemoryAllocatable * 100
+	}
+
+	return usage, nil
+}
+
 // CheckResources checks available CPU and memory resources
-func (kc *KubernetesChecker) CheckResources() (string, error) {
+func (kc *KubernetesChecker) CheckResources(outputFormat string) (string, error) {
 	nodes, err := kc.clientset.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{})
 	if err != nil {
 		return "", fmt.Errorf("failed to list nodes: %v", err)
 	}
 
-	var totalCPU, totalMemory, allocatableCPU, allocatableMemory int64
+	var totalCPURequests, totalMemoryRequests float64
+	var totalCPUCores, totalMemoryGB float64
 	readyNodes := 0
 
 	LogInfo("Checking resources on %d nodes...", len(nodes.Items))
 
+	// Create a slice to hold node information for sorting
+	type nodeInfo struct {
+		node         *corev1.Node
+		instanceType string
+	}
+	var nodeInfos []nodeInfo
+
+	// Collect node information and instance types
 	for _, node := range nodes.Items {
+		instanceType := "unknown"
+		if it, ok := node.Labels["node.kubernetes.io/instance-type"]; ok {
+			instanceType = it
+		} else if it, ok := node.Labels["beta.kubernetes.io/instance-type"]; ok {
+			instanceType = it
+		} else if it, ok := node.Labels["node.k8s.io/instance-type"]; ok {
+			instanceType = it
+		}
+		
+		nodeInfos = append(nodeInfos, nodeInfo{node: &node, instanceType: instanceType})
+	}
+
+	// Sort by instance type alphabetically
+	sort.Slice(nodeInfos, func(i, j int) bool {
+		return nodeInfos[i].instanceType < nodeInfos[j].instanceType
+	})
+
+	// Print header based on output format
+	if outputFormat == "csv" {
+		fmt.Printf("Name,Type,CPU_Capacity_Cores,Memory_Capaclity_GB,CPU_Requests_%%,CPU_Limits_%%,Memory_Requests_%%,Memory_Limits_%%,GPU_Alloc_Total\n")
+	} else {
+		// Print table header
+		fmt.Printf("Name\t\t\t\tType\t\tCPU\tMem(GB)\tCPU\tCPU\tMem\tMem\tGPU\n")
+		fmt.Printf("\t\t\t\t\t\tCapcty\tCapcty\t%%Req\t%%Limit\t%%Req\t%%Limit\tAlloc/Total\n")
+		fmt.Printf("----------------------------------------------------------------------------------------------------------------\n")
+	}
+
+	for _, nodeInfo := range nodeInfos {
+		node := nodeInfo.node
+		instanceType := nodeInfo.instanceType
 		// Check if node is ready
 		isReady := false
 		for _, condition := range node.Status.Conditions {
@@ -82,40 +217,66 @@ func (kc *KubernetesChecker) CheckResources() (string, error) {
 
 		readyNodes++
 
-		// Parse CPU and memory
-		cpu := node.Status.Allocatable[corev1.ResourceCPU]
-		memory := node.Status.Allocatable[corev1.ResourceMemory]
+		// Get resource usage percentages
+		usage, err := kc.GetNodeResourceUsage(node.Name)
+		if err != nil {
+			LogInfo("Node '%s' - failed to get usage: %v", node.Name, err)
+			continue
+		}
 
-		allocatableCPU += (&cpu).MilliValue()
-		allocatableMemory += (&memory).Value()
+		// Accumulate the converted values for accurate metrics
+		totalCPUCores += usage.CPUAllocatable
+		totalMemoryGB += usage.MemoryAllocatable
+		totalCPURequests += usage.CPURequests
+		totalMemoryRequests += usage.MemoryRequests
 
-		// Get total capacity
-		cpuCap := node.Status.Capacity[corev1.ResourceCPU]
-		memCap := node.Status.Capacity[corev1.ResourceMemory]
-		totalCPU += (&cpuCap).MilliValue()
-		totalMemory += (&memCap).Value()
+		// Format GPU info
+		gpuInfo := ""
+		if usage.GPUAllocatable > 0 {
+			gpuInfo = fmt.Sprintf("%d/%d", usage.GPURequests, usage.GPUAllocatable)
+		}
 
-		// Convert to human readable format for this node
-		nodeCpuCores := (&cpu).MilliValue() / 1000
-		nodeCpuTotal := (&cpuCap).MilliValue() / 1000
-		nodeMemoryGB := (&memory).Value() / (1024 * 1024 * 1024)
-		nodeMemoryTotalGB := (&memCap).Value() / (1024 * 1024 * 1024)
-
-		LogInfo("Node '%s': %d/%d CPU cores, %d/%d GB memory (allocatable/total)", 
-			node.Name, nodeCpuCores, nodeCpuTotal, nodeMemoryGB, nodeMemoryTotalGB)
+		// Print row based on output format
+		if outputFormat == "csv" {
+			fmt.Printf("%s,%s,%.2f,%.2f,%.1f,%.1f,%.1f,%.1f,%s\n", 
+				node.Name, instanceType, usage.CPUAllocatable, usage.MemoryAllocatable, 
+				usage.CPURequestsPercent, usage.CPULimitsPercent,usage.MemoryRequestsPercent, usage.MemoryLimitsPercent, gpuInfo)
+		} else {
+			// Print table row
+			fmt.Printf("%s\t%s\t%.2f\t%.2f\t%.1f%%\t%.1f%%\t%.1f%%\t%.1f%%\t%s\n", 
+				node.Name, instanceType, usage.CPUAllocatable, usage.MemoryAllocatable, 
+				usage.CPURequestsPercent, usage.CPULimitsPercent, usage.MemoryRequestsPercent, usage.MemoryLimitsPercent, gpuInfo)
+		}
 	}
 
 	LogInfo("Total ready nodes: %d", readyNodes)
+	
+	// Log the difference between total capacity and allocatable for debugging
+	LogInfo("Resource totals - CPU: %d cores allocatable; Memory: %d GB allocatable", totalCPUCores, totalMemoryGB)
 
-	// Convert to human readable format
-	cpuCores := allocatableCPU / 1000
-	memoryGB := allocatableMemory / (1024 * 1024 * 1024)
+	// Calculate aggregated percentages based on allocatable resources (consistent with individual node percentages)
+	// This ensures the cluster summary percentages match what users see when they manually calculate
+	// using the individual node percentages shown in the table
+	aggregatedCPUPercent := float64(0)
+	aggregatedMemoryPercent := float64(0)
+	
+	if totalCPUCores > 0 {
+		aggregatedCPUPercent = float64(totalCPURequests) / float64(totalCPUCores) * 100
+	}
+	if totalMemoryGB > 0 {
+		aggregatedMemoryPercent = float64(totalMemoryRequests) / float64(totalMemoryGB) * 100
+	}
 
-	LogInfo("Cluster total: %d/%d CPU cores, %d/%d GB memory (allocatable/total)", 
-		cpuCores, totalCPU/1000, memoryGB, totalMemory/(1024*1024*1024))
+	// Calculate available resources (allocatable minus what's already requested)
+	availableCPUCores := totalCPUCores - totalCPURequests
+	availableMemoryGB := totalMemoryGB - totalMemoryRequests
 
-	return fmt.Sprintf("%d/%d CPU cores, %d/%d GB memory (allocatable/total)", 
-		cpuCores, totalCPU/1000, memoryGB, totalMemory/(1024*1024*1024)), nil
+	fmt.Printf("\nCLUSTER SUMMARY:\n")
+	fmt.Printf("CPU: %.1f cores available, %.1f cores allocatable (%.1f%% already requested)\n", availableCPUCores, totalCPUCores, aggregatedCPUPercent)
+	fmt.Printf("Mem: %.1f GB available, %.1f GB allocatable (%.1f%% already requested)\n", availableMemoryGB, totalMemoryGB, aggregatedMemoryPercent)
+
+	return fmt.Sprintf("CPU: %.1f cores available, %.1f cores allocatable (%.1f%% already requested), Mem: %.1f GB available, %.1f GB allocatable (%.1f%% already requested)", 
+		availableCPUCores, totalCPUCores, aggregatedCPUPercent, availableMemoryGB, totalMemoryGB, aggregatedMemoryPercent), nil
 }
 
 // CheckNamespaceRBAC checks RBAC permissions in the specified namespace using SelfSubjectAccessReview
@@ -212,6 +373,31 @@ func (kc *KubernetesChecker) CheckStorageCapacity() (string, error) {
 	}
 
 	return fmt.Sprintf("adequate storage capacity (%.1f%% used)", usagePercent), nil
+}
+
+// ListNodeInstanceTypes returns a mapping of node name to instance type label
+func (kc *KubernetesChecker) ListNodeInstanceTypes() (map[string]string, error) {
+    nodes, err := kc.clientset.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{})
+    if err != nil {
+        return nil, fmt.Errorf("failed to list nodes: %v", err)
+    }
+
+    result := make(map[string]string, len(nodes.Items))
+    for _, node := range nodes.Items {
+        labels := node.Labels
+        instanceType := labels["node.kubernetes.io/instance-type"]
+        if instanceType == "" {
+            instanceType = labels["beta.kubernetes.io/instance-type"]
+        }
+        if instanceType == "" {
+            instanceType = labels["node.k8s.io/instance-type"]
+        }
+        if instanceType == "" {
+            instanceType = "unknown"
+        }
+        result[node.Name] = instanceType
+    }
+    return result, nil
 }
 
 // CheckStorageClassesCompatibility checks StorageClasses for common database compatibility

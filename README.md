@@ -194,9 +194,41 @@ $ dynactl cluster all check --namespace my-namespace
 
 Checks node readiness and aggregated CPU/memory resources. No namespace required.
 
+**Features:**
+- **Node Status**: Reports ready/not-ready nodes
+- **Resource Capacity**: Shows allocatable vs total CPU and memory for each node
+- **Resource Usage**: Displays percentage of CPU, memory, and GPU requests/limits for each node
+- **Instance Types**: Lists AWS instance types for each node
+
 **Example:**
 ```bash
 $ dynactl cluster node check
+```
+
+**Default Output:**
+```bash
+$ dynactl cluster node check
+Checking node resources...
+Name | Type | CPU Alloc/Total | Mem Alloc/Total | CPU %Req | CPU %Limits | Mem %Req | Mem %Limits | GPU Alloc/Total
+-----|------|----------------|-------------------|-----------|-------------|-----------|-------------|----------------
+ip-192-168-6-2.ec2.internal | c5a.xlarge | 3/4 | 6/7 GB | 0.8% | 0.0% | 1.8% | 11.2% | -
+ip-192-168-58-120.ec2.internal | c5a.xlarge | 3/4 | 6/7 GB | 5.9% | 12.8% | 43.6% | 96.9% | -
+ip-192-168-252-75.ec2.internal | g5.2xlarge | 7/8 | 30/30 GB | 50.9% | 50.6% | 80.3% | 82.4% | 8/10
+ip-192-168-61-169.ec2.internal | m5.large | 1/2 | 6/7 GB | 94.8% | 191.7% | 27.4% | 62.7% | -
+ip-192-168-40-124.ec2.internal | t3a.xlarge | 3/4 | 14/15 GB | 54.3% | 107.1% | 30.1% | 63.8% | -
+```
+
+*Note: Output is sorted alphabetically by instance type for easy comparison across node types.*
+
+**Verbose Output** (with `-v 2`):
+```bash
+$ dynactl cluster node check -v 2
+DEBUG: Starting dynactl with verbosity level 2
+Checking node resources...
+INFO: Checking resources on 24 nodes...
+Name | Type | CPU Alloc/Total | Mem Alloc/Total | CPU %Req | CPU %Limits | Mem %Req | Mem %Limits | GPU Alloc/Total
+-----|------|----------------|-------------------|-----------|-------------|-----------|-------------|----------------
+ip-192-168-252-75.ec2.internal | g5.2xlarge | 7/8 | 30/30 GB | 50.9% | 50.6% | 80.3% | 82.4% | 8/10
 ```
 
 #### `dynactl cluster permission check --namespace <namespace>`
