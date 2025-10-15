@@ -164,7 +164,7 @@ Pulls artifacts into a local cache and then pushes selected types to a target re
 **Example:**
 ```bash
 $ dynactl artifacts mirror \
-    --url artifacts.dynamo.ai/intact/3.23.2/manifests:3.23.2 \
+    --url artifacts.dynamo.ai/customer/3.23.2/manifests:3.23.2 \
     --target-registry customer.registry.example.com \
     --images
 ```
@@ -256,6 +256,14 @@ Checks node readiness and aggregated CPU/memory resources. No namespace required
 ```bash
 $ dynactl cluster node check
 ```
+
+### Release Automation
+
+Releases are generated automatically when changes land on `main`:
+
+- Update the `version` constant in `cmd/dynactl/main.go` as part of your PR.
+- After the PR is merged, the `Release` GitHub Actions workflow builds binaries for Linux, macOS, and Windows and publishes a `v<version>` GitHub release (creating the tag if needed).
+- No manual packaging or `gh release` commands are required.
 
 **Default Output:**
 ```bash
