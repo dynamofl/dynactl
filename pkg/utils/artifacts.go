@@ -19,8 +19,8 @@ type ArtifactManifest struct {
 	MaxUsers           *int      `json:"max_users"`
 	SPOC               SPOC      `json:"spoc"`
 	Artifacts          Artifacts `json:"artifacts"`
-	Images             []string  `json:"images"`  // Array of OCI URIs
-	Models             []string  `json:"models"`  // Array of OCI URIs
+	Images             []string  `json:"images"` // Array of OCI URIs
+	Models             []string  `json:"models"` // Array of OCI URIs
 	Charts             []Chart   `json:"charts"`
 }
 
@@ -67,6 +67,28 @@ type PullResult struct {
 	Errors         []string
 }
 
+// PullOptions controls which artifact categories are processed.
+type PullOptions struct {
+	IncludeImages bool
+	IncludeModels bool
+	IncludeCharts bool
+}
+
+// NormalizePullOptions enables all artifact categories if none are explicitly selected.
+func NormalizePullOptions(opts PullOptions) PullOptions {
+	normalized := MirrorOptions{
+		IncludeImages: opts.IncludeImages,
+		IncludeModels: opts.IncludeModels,
+		IncludeCharts: opts.IncludeCharts,
+	}
+	normalized = NormalizeMirrorOptions(normalized)
+	return PullOptions{
+		IncludeImages: normalized.IncludeImages,
+		IncludeModels: normalized.IncludeModels,
+		IncludeCharts: normalized.IncludeCharts,
+	}
+}
+
 // LoadManifest loads and parses the manifest file
 func LoadManifest(filename string) (*ArtifactManifest, error) {
 	file, err := os.Open(filename)
@@ -84,30 +106,32 @@ func LoadManifest(filename string) (*ArtifactManifest, error) {
 }
 
 // PullArtifacts pulls all artifacts specified in the manifest from Harbor
-func PullArtifacts(manifest *ArtifactManifest, outputDir string) error {
-	components := convertManifestToComponents(manifest)
-	
+func PullArtifacts(manifest *ArtifactManifest, outputDir string, options PullOptions) error {
+	options = NormalizePullOptions(options)
+
+	components := convertManifestToComponents(manifest, options)
+
 	LogInfo("=== Starting Artifact Pull Process ===")
 	LogInfo("Total artifacts to pull: %d", len(components))
 	LogInfo("Output directory: %s", outputDir)
-	
+
 	// Display component breakdown
 	displayComponentBreakdown(components)
-	
+
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		return fmt.Errorf("failed to create output directory: %v", err)
 	}
-	
+
 	// Pull all artifacts and collect results
 	result := pullAllArtifacts(components, outputDir)
-	
+
 	// Display summary
 	displayPullSummary(result)
-	
+
 	if result.FailedCount > 0 {
 		return fmt.Errorf("failed to pull %d artifacts", result.FailedCount)
 	}
-	
+
 	LogInfo("🎉 Successfully pulled all %d artifacts!", len(components))
 	return nil
 }
@@ -115,7 +139,7 @@ func PullArtifacts(manifest *ArtifactManifest, outputDir string) error {
 // displayComponentBreakdown displays a breakdown of components by type
 func displayComponentBreakdown(components []Component) {
 	LogInfo("Components breakdown:")
-	
+
 	imageCount := 0
 	modelCount := 0
 	chartCount := 0
@@ -129,7 +153,7 @@ func displayComponentBreakdown(components []Component) {
 			chartCount++
 		}
 	}
-	
+
 	if imageCount > 0 {
 		LogInfo("  - Container Images: %d", imageCount)
 	}
@@ -150,10 +174,10 @@ func pullAllArtifacts(components []Component, outputDir string) PullResult {
 		FailedCount:    0,
 		Errors:         []string{},
 	}
-	
+
 	for i, component := range components {
 		displayArtifactHeader(i+1, len(components), component)
-		
+
 		artifactStartTime := time.Now()
 		if err := pullSingleArtifact(component, outputDir); err != nil {
 			LogError("❌ Failed to pull artifact %s: %v", component.Name, err)
@@ -165,7 +189,7 @@ func pullAllArtifacts(components []Component, outputDir string) PullResult {
 			result.SuccessCount++
 		}
 	}
-	
+
 	result.Duration = time.Since(startTime)
 	return result
 }
@@ -195,43 +219,49 @@ func displayPullSummary(result PullResult) {
 }
 
 // convertManifestToComponents converts the new manifest format to unified components
-func convertManifestToComponents(manifest *ArtifactManifest) []Component {
+func convertManifestToComponents(manifest *ArtifactManifest, options PullOptions) []Component {
 	var components []Component
 
 	// Convert images (array of OCI URIs) to components
-	for _, imgURI := range manifest.Images {
-		uri := strings.TrimPrefix(imgURI, "oci://")
-		components = append(components, Component{
-			Name:      extractNameFromURI(uri),
-			Type:      "containerImage",
-			URI:       uri,
-			Tag:       "",
-			MediaType: "application/vnd.oci.image.manifest.v1+json",
-		})
+	if options.IncludeImages {
+		for _, imgURI := range manifest.Images {
+			uri := strings.TrimPrefix(imgURI, "oci://")
+			components = append(components, Component{
+				Name:      extractNameFromURI(uri),
+				Type:      "containerImage",
+				URI:       uri,
+				Tag:       "",
+				MediaType: "application/vnd.oci.image.manifest.v1+json",
+			})
+		}
 	}
 
 	// Convert models (array of OCI URIs) to components
-	for _, modelURI := range manifest.Models {
-		uri := strings.TrimPrefix(modelURI, "oci://")
-		components = append(components, Component{
-			Name:      extractNameFromURI(uri),
-			Type:      "mlModel",
-			URI:       uri,
-			Tag:       "",
-			MediaType: "application/vnd.dynamoai.model.v1+tar.gz",
-		})
+	if options.IncludeModels {
+		for _, modelURI := range manifest.Models {
+			uri := strings.TrimPrefix(modelURI, "oci://")
+			components = append(components, Component{
+				Name:      extractNameFromURI(uri),
+				Type:      "mlModel",
+				URI:       uri,
+				Tag:       "",
+				MediaType: "application/vnd.dynamoai.model.v1+tar.gz",
+			})
+		}
 	}
 
 	// Convert charts to components
-	for _, chart := range manifest.Charts {
-		uri := strings.TrimPrefix(chart.HarborPath, "oci://")
-		components = append(components, Component{
-			Name:      chart.Name,
-			Type:      "helmChart",
-			URI:       uri,
-			Tag:       chart.Version,
-			MediaType: "application/vnd.oci.image.manifest.v1+json",
-		})
+	if options.IncludeCharts {
+		for _, chart := range manifest.Charts {
+			uri := strings.TrimPrefix(chart.HarborPath, "oci://")
+			components = append(components, Component{
+				Name:      chart.Name,
+				Type:      "helmChart",
+				URI:       uri,
+				Tag:       chart.Version,
+				MediaType: "application/vnd.oci.image.manifest.v1+json",
+			})
+		}
 	}
 
 	return components
@@ -266,4 +296,4 @@ func CheckHarborLogin(registry string) error {
 	LogInfo("Checking Harbor login status for registry: %s", registry)
 	LogInfo("If you have trouble pulling artifacts, run: oras login %s", registry)
 	return nil
-} 
+}

@@ -37,9 +37,10 @@ on Dynamo AI deployment and maintenance.`,
 	commands.AddArtifactsCommands(rootCmd)
 	commands.AddClusterCommands(rootCmd)
 	commands.AddGuardCommands(rootCmd)
+	commands.AddRegistryCommands(rootCmd)
 
 	if err := rootCmd.Execute(); err != nil {
 		utils.LogError("%v", err)
 		os.Exit(1)
 	}
-} 
+}
