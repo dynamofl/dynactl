@@ -1,4 +1,3 @@
-
 name: Release
 
 on:
@@ -11,7 +10,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -25,17 +23,28 @@ jobs:
 
       - name: Determine version
         id: version
+        shell: bash
         run: |
-          VERSION=$(grep -E 'var \(\s*version\s*=\s*"' -A0 cmd/dynactl/main.go | sed -E 's/.*"(.+)"$//')
-          if [ -z "$VERSION" ]; then
-            echo "Unable to determine version from cmd/dynactl/main.go" >&2
-            exit 1
-          fi
-          echo "value=$VERSION" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          python - <<'PY'
+import os
+import pathlib
+import re
+
+text = pathlib.Path("cmd/dynactl/main.go").read_text()
+match = re.search(r'version\s*=\s*"([^"]+)"', text)
+if not match:
+    raise SystemExit("Unable to determine version from cmd/dynactl/main.go")
+value = match.group(1)
+with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+    fh.write(f"value={value}\n")
+PY
 
       - name: Check for existing tag
         id: tag
+        shell: bash
         run: |
+          set -euo pipefail
           VERSION="${{ steps.version.outputs.value }}"
           git fetch --tags --force --quiet
           if git rev-parse "refs/tags/v${VERSION}" >/dev/null 2>&1; then
@@ -48,6 +57,7 @@ jobs:
         if: steps.tag.outputs.exists == 'false'
         env:
           VERSION: ${{ steps.version.outputs.value }}
+        shell: bash
         run: |
           set -euo pipefail
 
@@ -65,7 +75,7 @@ jobs:
             mkdir -p "dist/${outfile}"
             GOOS="$os" GOARCH="$arch" go build -o "dist/${outfile}/${bin}" ./cmd/dynactl
 
-            pushd "dist/${outfile}" > /dev/null
+            pushd "dist/${outfile}" >/dev/null
             case "$format" in
               zip)
                 zip "../${outfile}.zip" "${bin}"
@@ -78,7 +88,7 @@ jobs:
                 exit 1
                 ;;
             esac
-            popd > /dev/null
+            popd >/dev/null
 
             rm -rf "dist/${outfile}"
           }
@@ -97,6 +107,15 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.ACTIONS_DEPLOY_KEY }}
           VERSION: ${{ steps.version.outputs.value }}
+        shell: bash
         run: |
           set -euo pipefail
-          gh release create "v${VERSION}"             dist/dynactl-v${VERSION}-linux-amd64.tar.gz             dist/dynactl-v${VERSION}-linux-arm64.tar.gz             dist/dynactl-v${VERSION}-darwin-amd64.tar.gz             dist/dynactl-v${VERSION}-darwin-arm64.tar.gz             dist/dynactl-v${VERSION}-windows-amd64.zip             dist/dynactl-v${VERSION}-windows-arm64.zip             --title "v${VERSION}"             --notes "Automated release for dynactl v${VERSION}."
+          gh release create "v${VERSION}" \
+            dist/dynactl-v${VERSION}-linux-amd64.tar.gz \
+            dist/dynactl-v${VERSION}-linux-arm64.tar.gz \
+            dist/dynactl-v${VERSION}-darwin-amd64.tar.gz \
+            dist/dynactl-v${VERSION}-darwin-arm64.tar.gz \
+            dist/dynactl-v${VERSION}-windows-amd64.zip \
+            dist/dynactl-v${VERSION}-windows-arm64.zip \
+            --title "v${VERSION}" \
+            --notes "Automated release for dynactl v${VERSION}."
