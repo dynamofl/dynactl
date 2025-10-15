@@ -257,6 +257,14 @@ Checks node readiness and aggregated CPU/memory resources. No namespace required
 $ dynactl cluster node check
 ```
 
+### Release Automation
+
+Releases are generated automatically when changes land on `main`:
+
+- Update the `version` constant in `cmd/dynactl/main.go` as part of your PR.
+- After the PR is merged, the `Release` GitHub Actions workflow builds binaries for Linux, macOS, and Windows and publishes a `v<version>` GitHub release (creating the tag if needed).
+- No manual packaging or `gh release` commands are required.
+
 **Default Output:**
 ```bash
 $ dynactl cluster node check
