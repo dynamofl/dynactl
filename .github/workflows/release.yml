@@ -26,19 +26,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python - <<'PY'
-            import os
+          VERSION=$(python - <<'PY'
             import pathlib
             import re
-
             text = pathlib.Path("cmd/dynactl/main.go").read_text()
             match = re.search(r'version\s*=\s*"([^"]+)"', text)
             if not match:
                 raise SystemExit("Unable to determine version from cmd/dynactl/main.go")
-            value = match.group(1)
-            with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
-                fh.write(f"value={value}\n")
-PY
+            print(match.group(1))
+          PY
+          )
+          echo "value=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Check for existing tag
         id: tag
@@ -60,21 +58,17 @@ PY
         shell: bash
         run: |
           set -euo pipefail
-
           build() {
             local os="$1"
             local arch="$2"
             local format="$3"
             local bin="dynactl"
             local outfile="dynactl-v${VERSION}-${os}-${arch}"
-
             if [ "$os" = "windows" ]; then
               bin="dynactl.exe"
             fi
-
             mkdir -p "dist/${outfile}"
             GOOS="$os" GOARCH="$arch" go build -o "dist/${outfile}/${bin}" ./cmd/dynactl
-
             pushd "dist/${outfile}" >/dev/null
             case "$format" in
               zip)
@@ -89,12 +83,9 @@ PY
                 ;;
             esac
             popd >/dev/null
-
             rm -rf "dist/${outfile}"
           }
-
           mkdir -p dist
-
           build linux amd64 tar
           build linux arm64 tar
           build darwin amd64 tar
