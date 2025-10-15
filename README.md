@@ -15,9 +15,9 @@ A Go-based tool to manage customer's DevOps operations on Dynamo AI deployment a
 ### Prerequisites
 
 - Go 1.21 or higher
-- Docker (for container operations)
+- Docker (for container operations and as the default credential store)
 - kubectl (for Kubernetes operations)
-- ORAS CLI (for OCI artifact operations)
+- (Optional) ORAS CLI if you prefer managing registry logins with `oras login`
 
 ### From Source
 
@@ -49,6 +49,21 @@ These options can be used with any dynactl command:
 ### `dynactl artifacts`
 
 Process artifacts for deployment and upgrade operations.
+
+#### Registry Authentication
+
+`dynactl` uses the embedded ORAS SDK and automatically reads credentials from:
+
+- Your Docker/Podman credential store (e.g., `docker login artifacts.dynamo.ai`)
+- Any existing ORAS CLI login
+- Credentials saved via `dynactl registry login`
+
+To store credentials directly through the CLI:
+```bash
+echo "super-secret-password" | dynactl registry login artifacts.dynamo.ai -u robot$jenkins-ci --password-stdin
+```
+
+You can also provide identity or access tokens with `--identity-token` or `--access-token`.
 
 #### `dynactl artifacts pull --file <filename>`
 
@@ -106,6 +121,14 @@ All files saved to: ./artifacts
 
 Pulls a manifest file from an OCI registry and then pulls all artifacts listed in the manifest.
 
+You can limit which artifact categories are downloaded by providing any combination of:
+
+- `--images` – container images only
+- `--models` – ML model archives only
+- `--charts` – Helm charts only
+
+If none of these flags are supplied all artifact types are pulled (backwards compatible).
+
 **Example:**
 ```bash
 $ dynactl artifacts pull --url artifacts.dynamo.ai/dynamoai/manifest:3.22.2
@@ -127,6 +150,23 @@ Artifacts found in manifest:
   Helm Charts: 3
 
 [Progress continues with detailed artifact pulling...]
+```
+
+#### `dynactl artifacts mirror`
+
+Pulls artifacts into a local cache and then pushes selected types to a target registry.
+
+- Requires either `--url` or `--file` to locate the manifest.
+- Requires `--target-registry` to define where artifacts are pushed.
+- Honors the same `--images`, `--models`, and `--charts` filters as `pull`. By default only container images are mirrored, and at present models/charts are not pushed.
+- Use `--cache-dir` to reuse an existing workspace or `--keep-cache` to retain the temporary cache that dynactl creates.
+
+**Example:**
+```bash
+$ dynactl artifacts mirror \
+    --url artifacts.dynamo.ai/intact/3.23.2/manifests:3.23.2 \
+    --target-registry customer.registry.example.com \
+    --images
 ```
 
 **Manifest File Format:**
@@ -169,6 +209,18 @@ Artifacts found in manifest:
   ]
 }
 ```
+
+### `dynactl registry login`
+
+Manage credentials used when pulling artifacts from private registries.
+
+```bash
+$ dynactl registry login artifacts.dynamo.ai -u robot$jenkins-ci --password-stdin
+```
+
+- Credentials are written to `~/.dynactl/credentials.json` with `0600` permissions.
+- `--password`, `--password-stdin`, `--identity-token`, and `--access-token` are supported.
+- Stored credentials are used alongside Docker/ORAS credentials when pulling manifests, container images, ML models, and Helm charts.
 
 ### `dynactl cluster`
 

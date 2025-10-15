@@ -18,18 +18,30 @@ func TestArtifactsCommands(t *testing.T) {
 	artifactsCmd := findSubcommand(rootCmd, "artifacts")
 	assert.NotNil(t, artifactsCmd, "artifacts command should exist")
 
-	// Test that both pull commands exist
-	pullURLCmd := findSubcommand(artifactsCmd, "pull")
-	assert.NotNil(t, pullURLCmd, "pull command should exist")
+	// Test that pull command exists and exposes flags
+	pullCmd := findSubcommand(artifactsCmd, "pull")
+	assert.NotNil(t, pullCmd, "pull command should exist")
 
-	// Test URL flag exists
-	urlFlag := pullURLCmd.Flags().Lookup("url")
+	urlFlag := pullCmd.Flags().Lookup("url")
 	assert.NotNil(t, urlFlag, "url flag should exist")
 
-	// Test output-dir flag exists
-	outputDirFlag := pullURLCmd.Flags().Lookup("output-dir")
+	outputDirFlag := pullCmd.Flags().Lookup("output-dir")
 	assert.NotNil(t, outputDirFlag, "output-dir flag should exist")
 	assert.Equal(t, "./artifacts", outputDirFlag.DefValue, "output-dir should have default value")
+
+	assert.NotNil(t, pullCmd.Flags().Lookup("images"), "images flag should exist")
+	assert.NotNil(t, pullCmd.Flags().Lookup("models"), "models flag should exist")
+	assert.NotNil(t, pullCmd.Flags().Lookup("charts"), "charts flag should exist")
+
+	// Test mirror command exists and exposes flags
+	mirrorCmd := findSubcommand(artifactsCmd, "mirror")
+	assert.NotNil(t, mirrorCmd, "mirror command should exist")
+	assert.NotNil(t, mirrorCmd.Flags().Lookup("target-registry"), "target-registry flag should exist")
+	assert.NotNil(t, mirrorCmd.Flags().Lookup("cache-dir"), "cache-dir flag should exist")
+	assert.NotNil(t, mirrorCmd.Flags().Lookup("keep-cache"), "keep-cache flag should exist")
+	assert.NotNil(t, mirrorCmd.Flags().Lookup("images"), "mirror images flag should exist")
+	assert.NotNil(t, mirrorCmd.Flags().Lookup("models"), "mirror models flag should exist")
+	assert.NotNil(t, mirrorCmd.Flags().Lookup("charts"), "mirror charts flag should exist")
 }
 
 func TestExtractFilenameFromURL(t *testing.T) {
@@ -127,6 +139,42 @@ func TestArtifactsPullCommand(t *testing.T) {
 	assert.True(t, err != nil || bytes.Contains(buf.Bytes(), []byte("no artifacts found in manifest")), "should error or print failure when no artifacts found in manifest")
 }
 
+func TestArtifactsMirrorCommandValidation(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "dynactl-test")
+	assert.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	manifestContent := `{
+		"customer_id": "test-customer",
+		"customer_name": "Test Customer",
+		"release_version": "1.0.0",
+		"images": [],
+		"models": [],
+		"charts": []
+	}`
+	manifestFile := filepath.Join(tempDir, "test-manifest.json")
+	err = os.WriteFile(manifestFile, []byte(manifestContent), 0o644)
+	assert.NoError(t, err)
+
+	rootCmd := &cobra.Command{}
+	AddArtifactsCommands(rootCmd)
+
+	buf := new(bytes.Buffer)
+	rootCmd.SetOut(buf)
+	rootCmd.SetErr(buf)
+
+	rootCmd.SetArgs([]string{"artifacts", "mirror"})
+	err = rootCmd.Execute()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "exactly one of --url or --file must be set")
+
+	buf.Reset()
+	rootCmd.SetArgs([]string{"artifacts", "mirror", "--file", manifestFile})
+	err = rootCmd.Execute()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "--target-registry must be set")
+}
+
 // Helper function to find a subcommand by name
 func findSubcommand(cmd *cobra.Command, name string) *cobra.Command {
 	for _, subcmd := range cmd.Commands() {
@@ -135,4 +183,4 @@ func findSubcommand(cmd *cobra.Command, name string) *cobra.Command {
 		}
 	}
 	return nil
-} 
+}
