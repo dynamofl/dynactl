@@ -174,28 +174,114 @@ Artifacts found in manifest:
 
 Handle cluster status and validation.
 
-#### `dynactl cluster check --namespace <namespace>`
+#### `dynactl cluster all check --namespace <namespace>`
 
-Performs comprehensive cluster validation including:
+Runs all available cluster checks:
 
 - **Kubernetes Version**: Checks compatibility with required version
-- **Resource Availability**: Validates CPU and memory requirements (32+ vCPU, 128+ GB memory)
-- **Namespace RBAC**: Verifies permissions for deployments, PVCs, services, configmaps, and secrets
-- **Cluster RBAC**: Checks cluster-level permissions for CRD creation
+- **Node Resources**: Aggregated CPU and memory across ready nodes
+- **Namespace Permissions**: Uses authorization API (SelfSubjectAccessReview) to validate create permissions for deployments, PVCs, services, configmaps, secrets
+- **Cluster Permissions**: Uses authorization API to validate permission to create CRDs
+- **StorageClasses**: Checks for common database-compatible provisioners
 - **Storage Capacity**: Assesses available storage and usage
 
 **Example:**
 ```bash
-$ dynactl cluster check --namespace my-namespace
-Checking cluster status for namespace: my-namespace
+$ dynactl cluster all check --namespace my-namespace
+```
 
-✓ Kubernetes version: 1.24.6 (compatible)
-✓ Available resources: 24/24 CPU cores, 96/96 GB memory (allocatable/total)
-✓ RBAC permissions: all required permissions available
-✓ Cluster RBAC permissions: all required cluster permissions available
-✓ Storage capacity: adequate storage capacity (45.2% used)
+#### `dynactl cluster node check`
 
-✓ Cluster check completed successfully
+Checks node readiness and aggregated CPU/memory resources. No namespace required.
+
+**Features:**
+- **Node Status**: Reports ready/not-ready nodes
+- **Resource Capacity**: Shows allocatable vs total CPU and memory for each node
+- **Resource Usage**: Displays percentage of CPU, memory, and GPU requests/limits for each node
+- **Instance Types**: Lists AWS instance types for each node
+
+**Example:**
+```bash
+$ dynactl cluster node check
+```
+
+**Default Output:**
+```bash
+$ dynactl cluster node check
+Checking node resources...
+Name | Type | CPU Alloc/Total | Mem Alloc/Total | CPU %Req | CPU %Limits | Mem %Req | Mem %Limits | GPU Alloc/Total
+-----|------|----------------|-------------------|-----------|-------------|-----------|-------------|----------------
+ip-192-168-6-2.ec2.internal | c5a.xlarge | 3/4 | 6/7 GB | 0.8% | 0.0% | 1.8% | 11.2% | -
+ip-192-168-58-120.ec2.internal | c5a.xlarge | 3/4 | 6/7 GB | 5.9% | 12.8% | 43.6% | 96.9% | -
+ip-192-168-252-75.ec2.internal | g5.2xlarge | 7/8 | 30/30 GB | 50.9% | 50.6% | 80.3% | 82.4% | 8/10
+ip-192-168-61-169.ec2.internal | m5.large | 1/2 | 6/7 GB | 94.8% | 191.7% | 27.4% | 62.7% | -
+ip-192-168-40-124.ec2.internal | t3a.xlarge | 3/4 | 14/15 GB | 54.3% | 107.1% | 30.1% | 63.8% | -
+```
+
+*Note: Output is sorted alphabetically by instance type for easy comparison across node types.*
+
+**Verbose Output** (with `-v 2`):
+```bash
+$ dynactl cluster node check -v 2
+DEBUG: Starting dynactl with verbosity level 2
+Checking node resources...
+INFO: Checking resources on 24 nodes...
+Name | Type | CPU Alloc/Total | Mem Alloc/Total | CPU %Req | CPU %Limits | Mem %Req | Mem %Limits | GPU Alloc/Total
+-----|------|----------------|-------------------|-----------|-------------|-----------|-------------|----------------
+ip-192-168-252-75.ec2.internal | g5.2xlarge | 7/8 | 30/30 GB | 50.9% | 50.6% | 80.3% | 82.4% | 8/10
+```
+
+#### `dynactl cluster permission check --namespace <namespace>`
+
+Checks permissions in a namespace and at cluster level using the authorization API.
+
+**Example:**
+```bash
+$ dynactl cluster permission check --namespace my-namespace
+```
+
+#### `dynactl cluster storage check`
+
+Checks StorageClasses for database compatibility and storage capacity.
+
+**Example:**
+```bash
+$ dynactl cluster storage check
+```
+
+### `dynactl guard models list -n <namespace> [--output json]`
+
+List deployments in a namespace with per-container resource requests and limits for CPU, memory, and GPUs (`nvidia.com/gpu`).
+
+**Example:**
+```bash
+$ dynactl guard models list -n my-namespace
+Namespace: my-namespace
+Deployment / Container                          Requests (cpu/mem/gpu)         Limits (cpu/mem/gpu)
+----------------------------------------------------------------------------------------------
+guard-api guard-container                        250m/256Mi/-                   500m/512Mi/-
+guard-worker worker                              500m/1Gi/1                     1/2Gi/1
+```
+
+JSON output:
+```bash
+$ dynactl guard models list -n my-namespace --output json
+[
+  {
+    "Name": "guard-api",
+    "Containers": [
+      {
+        "Name": "guard-container",
+        "RequestsCPU": "250m",
+        "RequestsMemory": "256Mi",
+        "RequestsGPU": "0",
+        "LimitsCPU": "500m",
+        "LimitsMemory": "512Mi",
+        "LimitsGPU": "0"
+      }
+    ]
+  }
+]
 ```
 
 ## Future Work
