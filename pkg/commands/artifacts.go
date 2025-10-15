@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/dynamoai/dynactl/pkg/utils"
 	"github.com/spf13/cobra"
@@ -346,13 +347,16 @@ func findManifestFile(dir string) (string, error) {
 	}
 
 	var manifestPath string
+	var latestMod time.Time
 	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
 		if !info.IsDir() && filepath.Base(path) == "manifest.json" {
-			manifestPath = path
-			return filepath.SkipAll
+			if info.ModTime().After(latestMod) || manifestPath == "" {
+				manifestPath = path
+				latestMod = info.ModTime()
+			}
 		}
 		return nil
 	})
