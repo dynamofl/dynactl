@@ -35,7 +35,7 @@ sudo mv bin/dynactl /usr/local/bin/
 
 ### From Binary
 
-Download the latest release from the [releases page](https://github.com/dynamoai/dynactl/releases) and extract the binary to your PATH.
+Download the latest release from the [releases page](https://github.com/dynamofl/dynactl/releases) and extract the binary to your PATH.
 
 ## Global Options
 
