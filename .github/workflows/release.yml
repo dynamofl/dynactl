@@ -27,17 +27,17 @@ jobs:
         run: |
           set -euo pipefail
           python - <<'PY'
-import os
-import pathlib
-import re
+            import os
+            import pathlib
+            import re
 
-text = pathlib.Path("cmd/dynactl/main.go").read_text()
-match = re.search(r'version\s*=\s*"([^"]+)"', text)
-if not match:
-    raise SystemExit("Unable to determine version from cmd/dynactl/main.go")
-value = match.group(1)
-with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
-    fh.write(f"value={value}\n")
+            text = pathlib.Path("cmd/dynactl/main.go").read_text()
+            match = re.search(r'version\s*=\s*"([^"]+)"', text)
+            if not match:
+                raise SystemExit("Unable to determine version from cmd/dynactl/main.go")
+            value = match.group(1)
+            with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+                fh.write(f"value={value}\n")
 PY
 
       - name: Check for existing tag
