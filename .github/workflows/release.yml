@@ -1,3 +1,4 @@
+
 name: Release
 
 on:
@@ -25,7 +26,7 @@ jobs:
       - name: Determine version
         id: version
         run: |
-          VERSION=$(grep -E 'var \\(\\s*version\\s*=\\s*"' -A0 cmd/dynactl/main.go | sed -E 's/.*"(.+)"$/\1/')
+          VERSION=$(grep -E 'var \(\s*version\s*=\s*"' -A0 cmd/dynactl/main.go | sed -E 's/.*"(.+)"$//')
           if [ -z "$VERSION" ]; then
             echo "Unable to determine version from cmd/dynactl/main.go" >&2
             exit 1
@@ -94,16 +95,8 @@ jobs:
       - name: Create GitHub release
         if: steps.tag.outputs.exists == 'false'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.ACTIONS_DEPLOY_KEY }}
           VERSION: ${{ steps.version.outputs.value }}
         run: |
           set -euo pipefail
-          gh release create "v${VERSION}" \
-            dist/dynactl-v${VERSION}-linux-amd64.tar.gz \
-            dist/dynactl-v${VERSION}-linux-arm64.tar.gz \
-            dist/dynactl-v${VERSION}-darwin-amd64.tar.gz \
-            dist/dynactl-v${VERSION}-darwin-arm64.tar.gz \
-            dist/dynactl-v${VERSION}-windows-amd64.zip \
-            dist/dynactl-v${VERSION}-windows-arm64.zip \
-            --title "v${VERSION}" \
-            --notes "Automated release for dynactl v${VERSION}."
+          gh release create "v${VERSION}"             dist/dynactl-v${VERSION}-linux-amd64.tar.gz             dist/dynactl-v${VERSION}-linux-arm64.tar.gz             dist/dynactl-v${VERSION}-darwin-amd64.tar.gz             dist/dynactl-v${VERSION}-darwin-arm64.tar.gz             dist/dynactl-v${VERSION}-windows-amd64.zip             dist/dynactl-v${VERSION}-windows-arm64.zip             --title "v${VERSION}"             --notes "Automated release for dynactl v${VERSION}."
