@@ -164,7 +164,7 @@ Pulls artifacts into a local cache and then pushes selected types to a target re
 **Example:**
 ```bash
 $ dynactl artifacts mirror \
-    --url artifacts.dynamo.ai/intact/3.23.2/manifests:3.23.2 \
+    --url artifacts.dynamo.ai/customer/3.23.2/manifests:3.23.2 \
     --target-registry customer.registry.example.com \
     --images
 ```

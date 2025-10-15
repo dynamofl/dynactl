@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -79,33 +80,27 @@ func pullHelmChart(component Component, outputDir string) error {
 	// We need: "oci://artifacts.dynamo.ai/dynamoai/3.22.2/charts/dynamoai-base"
 
 	// Remove the .tgz extension first
-	chartPath := strings.TrimSuffix(component.URI, ".tgz")
+	basePath := strings.TrimSuffix(component.URI, ".tgz")
 
-	// Extract the base chart name (remove version suffix)
-	// Split by '/' to get the filename part
-	parts := strings.Split(chartPath, "/")
-	if len(parts) == 0 {
+	dirPath := path.Dir(basePath)
+	fileBase := path.Base(basePath)
+
+	if strings.HasSuffix(fileBase, "-"+component.Tag) {
+		fileBase = strings.TrimSuffix(fileBase, "-"+component.Tag)
+	}
+
+	repoPath := dirPath
+	if dirPath == "." || dirPath == "" {
+		repoPath = fileBase
+	} else if path.Base(dirPath) != fileBase {
+		repoPath = path.Join(dirPath, fileBase)
+	}
+
+	if repoPath == "" {
 		return fmt.Errorf("invalid chart path: %s", component.URI)
 	}
 
-	filename := parts[len(parts)-1]
-	// Remove version suffix (e.g., "dynamoai-base-1.1.2" -> "dynamoai-base")
-	// Find the last dash followed by version pattern
-	lastDashIndex := strings.LastIndex(filename, "-")
-	if lastDashIndex > 0 {
-		// Check if the part after the last dash looks like a version
-		versionPart := filename[lastDashIndex+1:]
-		if strings.Contains(versionPart, ".") {
-			// This looks like a version, remove it
-			filename = filename[:lastDashIndex]
-		}
-	}
-
-	// Reconstruct the chart path with the base name
-	parts[len(parts)-1] = filename
-	chartPath = strings.Join(parts, "/")
-
-	chartRef := fmt.Sprintf("oci://%s", chartPath)
+	chartRef := fmt.Sprintf("oci://%s", repoPath)
 
 	LogInfo("📊 Pulling Helm chart...")
 	LogInfo("  Chart: %s", chartRef)
@@ -128,7 +123,7 @@ func pullHelmChart(component Component, outputDir string) error {
 	}
 
 	// Check if the chart was downloaded and report its size
-	expectedChartFile := filepath.Join(outputDir, fmt.Sprintf("%s-%s.tgz", filename, component.Tag))
+	expectedChartFile := filepath.Join(outputDir, fmt.Sprintf("%s-%s.tgz", component.Name, component.Tag))
 	if fileInfo, err := os.Stat(expectedChartFile); err == nil {
 		sizeMB := float64(fileInfo.Size()) / (1024 * 1024)
 		LogInfo("  Chart downloaded: %.2f MB", sizeMB)
