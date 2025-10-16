@@ -2,7 +2,7 @@
 
 # Build the binary
 build:
-	go build -o bin/dynactl ./cmd/dynactl
+	go build -o bin/dynactl ./
 
 # Run tests
 test:
@@ -24,10 +24,10 @@ deps:
 # Build for multiple platforms
 build-all: clean
 	mkdir -p bin
-	GOOS=linux GOARCH=amd64 go build -o bin/dynactl-linux-amd64 ./cmd/dynactl
-	GOOS=darwin GOARCH=amd64 go build -o bin/dynactl-darwin-amd64 ./cmd/dynactl
-	GOOS=darwin GOARCH=arm64 go build -o bin/dynactl-darwin-arm64 ./cmd/dynactl
-	GOOS=windows GOARCH=amd64 go build -o bin/dynactl-windows-amd64.exe ./cmd/dynactl
+	GOOS=linux GOARCH=amd64 go build -o bin/dynactl-linux-amd64 ./
+	GOOS=darwin GOARCH=amd64 go build -o bin/dynactl-darwin-amd64 ./
+	GOOS=darwin GOARCH=arm64 go build -o bin/dynactl-darwin-arm64 ./
+	GOOS=windows GOARCH=amd64 go build -o bin/dynactl-windows-amd64.exe ./
 
 # Default target
 all: deps lint test build 
