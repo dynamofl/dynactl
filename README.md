@@ -23,7 +23,7 @@ A Go-based tool to manage customer's DevOps operations on Dynamo AI deployment a
 
 ```bash
 # Clone the repository
-git clone https://github.com/dynamoai/dynactl.git
+git clone https://github.com/dynamofl/dynactl.git
 cd dynactl
 
 # Build the binary
@@ -36,12 +36,12 @@ sudo mv bin/dynactl /usr/local/bin/
 ### Using `go install`
 
 ```bash
-GO111MODULE=on go install github.com/dynamoai/dynactl@latest
+GO111MODULE=on go install github.com/dynamofl/dynactl@latest
 ```
 
 ### From Binary
 
-Download the latest release from the [releases page](https://github.com/dynamoai/dynactl/releases) and extract the binary to your PATH.
+Download the latest release from the [releases page](https://github.com/dynamofl/dynactl/releases) and extract the binary to your PATH.
 
 ## Global Options
 

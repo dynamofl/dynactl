@@ -3,8 +3,8 @@ package main
 import (
 	"os"
 
-	"github.com/dynamoai/dynactl/pkg/commands"
-	"github.com/dynamoai/dynactl/pkg/utils"
+	"github.com/dynamofl/dynactl/pkg/commands"
+	"github.com/dynamofl/dynactl/pkg/utils"
 	"github.com/spf13/cobra"
 )
 

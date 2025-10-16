@@ -1,4 +1,4 @@
-module github.com/dynamoai/dynactl
+module github.com/dynamofl/dynactl
 
 go 1.24.0
 
