@@ -9,11 +9,11 @@ import (
 )
 
 var (
-	version = "0.2.1"
+	version = "0.2.2"
 	verbose int
 )
 
-func main() {
+func newRootCommand() *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:   "dynactl",
 		Short: "Dynamo AI Deployment Tool",
@@ -24,22 +24,23 @@ on Dynamo AI deployment and maintenance.`,
 			DisableDefaultCmd: true,
 		},
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
-			// Set up logging based on verbosity
 			utils.SetLogLevel(verbose)
 			utils.LogDebug("Starting dynactl with verbosity level %d", verbose)
 		},
 	}
 
-	// Global flags
 	rootCmd.PersistentFlags().IntVarP(&verbose, "verbose", "v", 0, "Increase verbosity (can be used multiple times)")
 
-	// Add command groups
 	commands.AddArtifactsCommands(rootCmd)
 	commands.AddClusterCommands(rootCmd)
 	commands.AddGuardCommands(rootCmd)
 	commands.AddRegistryCommands(rootCmd)
 
-	if err := rootCmd.Execute(); err != nil {
+	return rootCmd
+}
+
+func main() {
+	if err := newRootCommand().Execute(); err != nil {
 		utils.LogError("%v", err)
 		os.Exit(1)
 	}

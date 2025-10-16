@@ -33,6 +33,12 @@ make build
 sudo mv bin/dynactl /usr/local/bin/
 ```
 
+### Using `go install`
+
+```bash
+GO111MODULE=on go install github.com/dynamoai/dynactl@latest
+```
+
 ### From Binary
 
 Download the latest release from the [releases page](https://github.com/dynamofl/dynactl/releases) and extract the binary to your PATH.
@@ -261,7 +267,7 @@ $ dynactl cluster node check
 
 Releases are generated automatically when changes land on `main`:
 
-- Update the `version` constant in `cmd/dynactl/main.go` as part of your PR.
+- Update the `version` constant in `main.go` as part of your PR.
 - After the PR is merged, the `Release` GitHub Actions workflow builds binaries for Linux, macOS, and Windows and publishes a `v<version>` GitHub release (creating the tag if needed).
 - No manual packaging or `gh release` commands are required.
 
