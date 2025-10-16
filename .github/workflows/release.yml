@@ -1,0 +1,107 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Determine version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION=$(awk -F '"' '/version\s*=/{print $2; exit}' cmd/dynactl/main.go)
+          if [ -z "$VERSION" ]; then
+            echo "Unable to determine version from cmd/dynactl/main.go" >&2
+            exit 1
+          fi
+          echo "value=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Check for existing tag
+        id: tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.value }}"
+          git fetch --tags --force --quiet
+          if git rev-parse "refs/tags/v${VERSION}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build release artifacts
+        if: steps.tag.outputs.exists == 'false'
+        env:
+          VERSION: ${{ steps.version.outputs.value }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          build() {
+            local os="$1"
+            local arch="$2"
+            local format="$3"
+            local bin="dynactl"
+            local outfile="dynactl-v${VERSION}-${os}-${arch}"
+            if [ "$os" = "windows" ]; then
+              bin="dynactl.exe"
+            fi
+            mkdir -p "dist/${outfile}"
+            GOOS="$os" GOARCH="$arch" go build -o "dist/${outfile}/${bin}" ./cmd/dynactl
+            pushd "dist/${outfile}" >/dev/null
+            case "$format" in
+              zip)
+                zip "../${outfile}.zip" "${bin}"
+                ;;
+              tar)
+                tar -czf "../${outfile}.tar.gz" "${bin}"
+                ;;
+              *)
+                echo "Unknown archive format: $format" >&2
+                exit 1
+                ;;
+            esac
+            popd >/dev/null
+            rm -rf "dist/${outfile}"
+          }
+          mkdir -p dist
+          build linux amd64 tar
+          build linux arm64 tar
+          build darwin amd64 tar
+          build darwin arm64 tar
+          build windows amd64 zip
+          build windows arm64 zip
+
+      - name: Create GitHub release
+        if: steps.tag.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.ACTIONS_DEPLOY_KEY }}
+          VERSION: ${{ steps.version.outputs.value }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create "v${VERSION}" \
+            dist/dynactl-v${VERSION}-linux-amd64.tar.gz \
+            dist/dynactl-v${VERSION}-linux-arm64.tar.gz \
+            dist/dynactl-v${VERSION}-darwin-amd64.tar.gz \
+            dist/dynactl-v${VERSION}-darwin-arm64.tar.gz \
+            dist/dynactl-v${VERSION}-windows-amd64.zip \
+            dist/dynactl-v${VERSION}-windows-arm64.zip \
+            --title "v${VERSION}" \
+            --notes "Automated release for dynactl v${VERSION}."

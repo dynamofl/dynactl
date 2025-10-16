@@ -17,7 +17,7 @@
       "name": "dynamoai-base",
       "version": "1.0.0",
       "appVersion": "3.21.2",
-      "harbor_path": "oci://artifacts.dynamo.ai/intact-helm-charts/intact--dynamoai-base"
+      "harbor_path": "oci://artifacts.dynamo.ai/sample-helm-charts/sample--dynamoai-base"
     }
   ]
 } 

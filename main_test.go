@@ -13,7 +13,7 @@ func TestMainCommand(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
 	// Test version command
-	cmd := createRootCommand()
+	cmd := createTestRootCommand()
 	cmd.SetOut(&stdout)
 	cmd.SetErr(&stderr)
 	cmd.SetArgs([]string{"--version"})
@@ -50,25 +50,16 @@ func TestMainCommand(t *testing.T) {
 }
 
 // createRootCommand creates a root command for testing
-func createRootCommand() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "dynactl",
-		Short: "Dynamo AI Deployment Tool",
-		Long: `A Go-based tool to manage customer's DevOps operations
-on Dynamo AI deployment and maintenance.`,
-		Version: version,
-	}
-
-	// Add global flags
-	cmd.PersistentFlags().IntVarP(&verbose, "verbose", "v", 0, "Increase verbosity (can be used multiple times)")
+func createTestRootCommand() *cobra.Command {
+	cmd := newRootCommand()
 
 	// Add a dummy subcommand to ensure Cobra errors on unknown commands
 	dummy := &cobra.Command{
 		Use:   "dummy",
 		Short: "Dummy subcommand",
-		Run: func(cmd *cobra.Command, args []string) {},
+		Run:   func(cmd *cobra.Command, args []string) {},
 	}
 	cmd.AddCommand(dummy)
 
 	return cmd
-} 
+}
