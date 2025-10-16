@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dynamoai/dynactl/pkg/utils"
+	"github.com/dynamofl/dynactl/pkg/utils"
 	"github.com/spf13/cobra"
 )
 
