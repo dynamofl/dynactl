@@ -26,9 +26,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          VERSION=$(awk -F '"' '/version\s*=/{print $2; exit}' cmd/dynactl/main.go)
+          VERSION=$(awk -F '"' '/version\s*=/{print $2; exit}' main.go)
           if [ -z "$VERSION" ]; then
-            echo "Unable to determine version from cmd/dynactl/main.go" >&2
+            echo "Unable to determine version from main.go" >&2
             exit 1
           fi
           echo "value=$VERSION" >> "$GITHUB_OUTPUT"
@@ -63,7 +63,7 @@ jobs:
               bin="dynactl.exe"
             fi
             mkdir -p "dist/${outfile}"
-            GOOS="$os" GOARCH="$arch" go build -o "dist/${outfile}/${bin}" ./cmd/dynactl
+            GOOS="$os" GOARCH="$arch" go build -o "dist/${outfile}/${bin}" ./
             pushd "dist/${outfile}" >/dev/null
             case "$format" in
               zip)
